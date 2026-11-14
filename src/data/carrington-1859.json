@@ -5,9 +5,10 @@
   "stormIntensity": 1.0,
   "isBlackoutRisk": true,
   "timestamp": "1859-09-01T12:00:00.000Z",
+  "cmeDirection": "Earth-directed",
   "_meta": {
     "name": "Carrington Event 1859",
-    "date": "1–2 September 1859",
+    "date": "1\u20132 September 1859",
     "confidence": "historical",
     "notes": "Largest recorded geomagnetic storm. Aurora seen at tropical latitudes. Telegraph systems failed globally. Estimated from ice-core nitrate spikes and historical records.",
     "dst": -1600,

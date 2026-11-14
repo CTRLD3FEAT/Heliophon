@@ -58,6 +58,8 @@ npm run dev
 Click **▶ Play Space Weather** to start audio (browser requires a user gesture).
 Select any of the five historical storms in the left sidebar to replay them offline — this guarantees a reliable demo even when the live APIs are down.
 
+**Deploy:** push to `main` and Vercel auto-deploys. The app reads `NEXT_PUBLIC_DEPLOY_URL` for the shareable link; if unset it falls back to `localhost:3000`.
+
 ## 📡 Data Sources
 
 - **NASA DONKI API** — CME (coronal mass ejection) and FLS (solar flare) data.
@@ -96,8 +98,10 @@ src/
 
 ## 🎯 Submission Checklist
 
-- [x] Live app running (Vercel deploy pending)
+- [x] Live app running (Vercel deploy pending — set `NEXT_PUBLIC_DEPLOY_URL` and push to `main`)
 - [x] README with NASA/NOAA attribution + Quebec 1989 story
+- [x] 5-event historical library (offline demo guaranteed)
+- [x] Live visualizer + blackout alert in player bar
 - [ ] 60-second demo video
 - [ ] 7-slide pitch deck
 - [ ] NASA portal submission (URL + repo + deck)

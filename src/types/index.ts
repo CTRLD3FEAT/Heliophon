@@ -8,6 +8,16 @@ export interface SpaceWeatherEvent {
 
   // Optional forecast data
   forecast?: SpaceWeatherForecast;
+
+  // --- DONKI-derived fields (currently missing from fetchSpaceVitals) ---
+  cmeHalfAngle?: number;         // CME angular width in degrees
+  cmeDirection?: string;         // e.g. "Earth-directed"
+  flarePeakTime?: string;        // ISO timestamp of flare peak
+  activeRegion?: string;         // NOAA active region number, e.g. "12673"
+
+  // Carried from fetchSpaceVitals when one or more live sources failed.
+  // Lets the UI surface "live data unavailable" instead of a silent zeroed storm.
+  _sourceErrors?: string[];
 }
 
 export interface SpaceWeatherForecast {

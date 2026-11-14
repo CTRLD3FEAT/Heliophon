@@ -73,47 +73,57 @@ export interface KPIndexData {
  * Fetches latest Coronal Mass Ejections from NASA DONKI
  */
 export async function fetchLatestCME(): Promise<RawCME | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+  let response: Response;
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-    const response = await fetch(
+    response = await fetch(
       `${DONKI_BASE}/CME?startDate=${getDateDaysAgo(3)}&api_key=${NASA_API_KEY}`,
       { signal: controller.signal, next: { revalidate: 300 } }
     );
+  } catch (err) {
     clearTimeout(timeout);
-
-    if (!response.ok) throw new Error('CME API failed');
-    const data: RawCME[] = await response.json();
-
-    // Return the most recent Earth-directed CME
-    const earthDirected = data.filter(cme => cme.isEarthDirected);
-    return earthDirected.length > 0 ? earthDirected[0] : data[0] || null;
-  } catch (error) {
-    console.warn('CME fetch failed, using fallback:', error);
-    return null;
+    throw new Error(`CME network error: ${err instanceof Error ? err.message : String(err)}`);
   }
+  clearTimeout(timeout);
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => '');
+    const summary = body.slice(0, 160);
+    throw new Error(`CME API HTTP ${response.status}: ${summary || response.statusText}`);
+  }
+  const data: RawCME[] = await response.json();
+
+  // Return the most recent Earth-directed CME
+  const earthDirected = data.filter(cme => cme.isEarthDirected);
+  return earthDirected.length > 0 ? earthDirected[0] : data[0] || null;
 }
 
 /**
  * Fetches latest Solar Flares from NASA DONKI
  */
 export async function fetchLatestFlare(): Promise<RawFlare | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+  let response: Response;
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-    const response = await fetch(
+    response = await fetch(
       `${DONKI_BASE}/FLR?startDate=${getDateDaysAgo(3)}&api_key=${NASA_API_KEY}`,
       { signal: controller.signal, next: { revalidate: 300 } }
     );
+  } catch (err) {
     clearTimeout(timeout);
-
-    if (!response.ok) throw new Error('Flare API failed');
-    const data: RawFlare[] = await response.json();
-    return data[0] || null;
-  } catch (error) {
-    console.warn('Flare fetch failed, using fallback:', error);
-    return null;
+    throw new Error(`Flare network error: ${err instanceof Error ? err.message : String(err)}`);
   }
+  clearTimeout(timeout);
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => '');
+    const summary = body.slice(0, 160);
+    throw new Error(`Flare API HTTP ${response.status}: ${summary || response.statusText}`);
+  }
+  const data: RawFlare[] = await response.json();
+  return data[0] || null;
 }
 
 /**
@@ -132,10 +142,16 @@ export async function fetchKPIndex(): Promise<number> {
     if (!response.ok) throw new Error('Kp Index API failed');
     const data = await response.json();
 
-    // Data format: [["time_tag", "kp_index"], ...]
-    if (Array.isArray(data) && data.length > 1) {
+    // NOAA returns an array of OBJECTS: [{"time_tag":..., "Kp":1.0}, ...]
+    // (Older feeds used tuples ["time_tag", kp_index]; handle both.)
+    if (Array.isArray(data) && data.length > 0) {
       const latest = data[data.length - 1];
-      return parseFloat(latest[1]) || 0;
+      if (Array.isArray(latest)) {
+        return parseFloat(latest[1]) || 0;
+      }
+      if (latest && typeof latest === 'object') {
+        return parseFloat(latest.Kp ?? latest.kp_index) || 0;
+      }
     }
     return 0;
   } catch (error) {
@@ -160,6 +176,13 @@ export async function fetchSpaceVitals(): Promise<SpaceWeatherEvent> {
   const flareData = flare.status === 'fulfilled' ? flare.value : null;
   const kpValue = kpIndex.status === 'fulfilled' ? kpIndex.value : 0;
 
+  // Collect per-source failures so the UI can surface them instead of
+  // silently showing a zeroed storm that looks like "all clear".
+  const sourceErrors: string[] = [];
+  if (cme.status === 'rejected') sourceErrors.push(`CME: ${cme.reason}`);
+  if (flare.status === 'rejected') sourceErrors.push(`Flare: ${flare.reason}`);
+  if (kpIndex.status === 'rejected') sourceErrors.push(`Kp: ${kpIndex.reason}`);
+
   // Storm energy score (0.0-1.0) derived from NOAA G-scale levels.
   // G0 (Kp<5) = quiet, G1 (Kp 5) = 0.25, G2 (Kp 6) = 0.5,
   // G3 (Kp 7) = 0.75, G4 (Kp 8) = 0.875, G5 (Kp 9) = 1.0
@@ -174,7 +197,17 @@ export async function fetchSpaceVitals(): Promise<SpaceWeatherEvent> {
     kpIndex: kpValue,
     stormIntensity,
     isBlackoutRisk,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    // Carry DONKI-derived detail so the Details panel reads real values
+    // instead of hardcoded N/A defaults.
+    cmeHalfAngle: cmeData?.halfAngle,
+    cmeDirection: cmeData?.isEarthDirected ? 'Earth-directed' : undefined,
+    flarePeakTime: flareData?.peakTime,
+    activeRegion: flareData?.activeRegionNum
+      ? String(flareData.activeRegionNum)
+      : undefined,
+    // Carries the failure detail so the UI can show "Live data unavailable".
+    _sourceErrors: sourceErrors.length ? sourceErrors : undefined
   };
 }
 
@@ -212,11 +245,80 @@ export const mockSpaceVitals = {
   kpIndex: 8.3,
   stormIntensity: 0.92,
   isBlackoutRisk: true,
-  timestamp: '2026-11-14T01:35:00.000Z'
+  timestamp: '2026-11-14T01:35:00.000Z',
+  // Plausible DONKI-derived values so the Details panel does not read N/A
+  // when the live API is down and the mock is in use.
+  cmeHalfAngle: 36,
+  cmeDirection: 'Earth-directed',
+  flarePeakTime: '2026-11-14T01:20:00.000Z',
+  activeRegion: '12875'
 };
 
 export function getMockSpaceVitals(): import('@/types').SpaceWeatherEvent {
   return mockSpaceVitals;
+}
+
+/**
+ * Health-check all three live sources. Returns a per-source status so the UI
+ * can show "Live data unavailable" instead of a silent zeroed storm.
+ *
+ * This does NOT throw — it reports status so the caller can decide how to
+ * degrade (fall back to cached data, show an error banner, etc.).
+ */
+export interface ApiHealth {
+  cme: { ok: boolean; error?: string };
+  flare: { ok: boolean; error?: string };
+  kp: { ok: boolean; error?: string };
+  allOk: boolean;
+}
+
+export async function checkApiHealth(): Promise<ApiHealth> {
+  const result: ApiHealth = {
+    cme: { ok: false },
+    flare: { ok: false },
+    kp: { ok: false },
+    allOk: false
+  };
+
+  const probe = async (
+    url: string,
+    label: 'cme' | 'flare' | 'kp'
+  ): Promise<void> => {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
+      const response = await fetch(url, {
+        signal: controller.signal,
+        next: { revalidate: 60 }
+      });
+      clearTimeout(timeout);
+      if (!response.ok) {
+        result[label].error = `HTTP ${response.status}`;
+        return;
+      }
+      const data = await response.json();
+      // A successful probe must return non-empty usable data.
+      const hasData = Array.isArray(data)
+        ? data.length > 0
+        : data && typeof data === 'object';
+      if (!hasData) {
+        result[label].error = 'empty response';
+        return;
+      }
+      result[label].ok = true;
+    } catch (err) {
+      result[label].error = err instanceof Error ? err.message : String(err);
+    }
+  };
+
+  await Promise.all([
+    probe(`${DONKI_BASE}/CME?startDate=${getDateDaysAgo(3)}&api_key=${NASA_API_KEY}`, 'cme'),
+    probe(`${DONKI_BASE}/FLR?startDate=${getDateDaysAgo(3)}&api_key=${NASA_API_KEY}`, 'flare'),
+    probe(`${NOAA_SWPC_BASE}/products/noaa-planetary-k-index.json`, 'kp')
+  ]);
+
+  result.allOk = result.cme.ok && result.flare.ok && result.kp.ok;
+  return result;
 }
 
 /**

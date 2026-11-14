@@ -109,7 +109,7 @@ export function EventSidebar({
         {/* Live Data Section */}
         <div className="mb-4 p-3 rounded-lg bg-slate-800/50 border border-slate-700/50">
           <div className="flex items-center gap-2 mb-2">
-            <span className={`w-2 h-2 rounded-full ${isLoadingLive ? 'bg-yellow-400 animate-pulse' : 'bg-green-400'}`} />
+            <span className={`w-2 h-2 rounded-full ${isLoadingLive ? 'bg-yellow-400 animate-pulse' : liveData?._sourceErrors?.length ? 'bg-yellow-400' : 'bg-green-400'}`} />
             <span className="text-sm font-medium text-slate-200">NASA/NOAA Live Feed</span>
           </div>
           {liveData && !isLoadingLive && (
@@ -130,6 +130,11 @@ export function EventSidebar({
                 <span>Storm Level</span>
                 <span className={`font-mono ${getKpLevel(liveData.kpIndex).color}`}>{getKpLevel(liveData.kpIndex).label}</span>
               </div>
+              {liveData._sourceErrors && liveData._sourceErrors.length > 0 && (
+                <div style={{marginTop: '6px', padding: '6px 8px', background: '#FFF3CD', border: '1px solid #FFC107', borderRadius: '4px', fontSize: '11px', color: '#856404'}}>
+                  <strong>⚠ Degraded:</strong> {liveData._sourceErrors.join('; ')}
+                </div>
+              )}
             </div>
           )}
           {isLoadingLive && (

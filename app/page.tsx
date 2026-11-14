@@ -366,23 +366,29 @@ export default function Home() {
               <span className="tag">{(selectedEvent as any)._meta?.confidence || 'direct'}</span>
             </div>
             <span className="muted" style={{fontSize: '12px'}}>{(selectedEvent as any)._meta?.date || 'Live data'} UTC</span>
+            {/* Show live-data degradation banner if any source failed */}
+            {selectedEvent._sourceErrors && selectedEvent._sourceErrors.length > 0 && (
+              <div style={{marginTop: '8px', padding: '8px 12px', background: '#FFF3CD', border: '1px solid #FFC107', borderRadius: '4px', fontSize: '12px', color: '#856404'}}>
+                <strong>⚠ Live data degraded:</strong> {selectedEvent._sourceErrors.join('; ')}
+              </div>
+            )}
           </div>
           <div className="sec">
             <h3 className="h">Coronal mass ejection</h3>
             <dl className="kv">
               <dt className="muted">Speed</dt><dd>{selectedEvent.cmeSpeed.toLocaleString()} km/s</dd>
-              <dt className="muted">Half-angle</dt><dd>{(selectedEvent as any).cmeHalfAngle || '30'}°</dd>
-              <dt className="muted">Direction</dt><dd>{(selectedEvent as any).cmeDirection || 'Earth-directed'}</dd>
+              <dt className="muted">Half-angle</dt><dd>{selectedEvent.cmeHalfAngle !== undefined ? `${selectedEvent.cmeHalfAngle}°` : 'N/A'}</dd>
+              <dt className="muted">Direction</dt><dd>{selectedEvent.cmeDirection || 'N/A'}</dd>
               <dt className="muted">Est. arrival</dt><dd>{(selectedEvent as any)._meta?.estimatedArrival || 'N/A'}</dd>
-              <dt className="muted">Earth-directed</dt><dd>Yes</dd>
+              <dt className="muted">Earth-directed</dt><dd>{selectedEvent.cmeDirection === 'Earth-directed' ? 'Yes' : 'N/A'}</dd>
             </dl>
           </div>
           <div className="sec">
             <h3 className="h">Solar flare</h3>
             <dl className="kv">
               <dt className="muted">Class</dt><dd>{selectedEvent.flareClass}</dd>
-              <dt className="muted">Peak time</dt><dd>{(selectedEvent as any).flarePeakTime || 'N/A'}</dd>
-              <dt className="muted">Active region</dt><dd>{(selectedEvent as any).activeRegion || 'N/A'}</dd>
+              <dt className="muted">Peak time</dt><dd>{selectedEvent.flarePeakTime || 'N/A'}</dd>
+              <dt className="muted">Active region</dt><dd>{selectedEvent.activeRegion || 'N/A'}</dd>
             </dl>
           </div>
           <div className="sec">

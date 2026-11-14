@@ -6,22 +6,18 @@ This document assigns concrete tasks to each role. The solo-built **Engine** (da
 
 ## Role 1: Researcher — Historical Event Library
 
-**Goal:** Expand the simulation dropdown from 1 event (Quebec 1989) to at least 4 well-documented historical storms.
+**Status: ✅ COMPLETE** — 5 events in `src/data/` with `_meta` confidence labels, selectable via `EventSidebar`.
 
-**Files to modify:**
-- `src/data/` — add new `.json` files following the `SpaceWeatherEvent` shape
-- `app/page.tsx` — add new imports and a selector UI (dropdown/radio group)
-- `src/types/index.ts` — if you need to add new fields (e.g., `eventName`, `description`, `confidence`)
-
-**Events to add (with documented parameters):**
+**Events added (with documented parameters):**
 | Event | Date | CME Speed | Flare | Kp | Dst | Source |
 |-------|------|-----------|-------|----|-----|--------|
 | Carrington 1859 | 1–2 Sep 1859 | ~2000 km/s | ~X45 | 9 | -1600 nT | Ice-core / historical |
 | Halloween 2003 | 28 Oct–4 Nov 2003 | 1850 km/s | X17.2+X10 | 9 | -383 nT | Direct measurement |
 | May 2024 Superstorm | 10–11 May 2024 | 800 km/s | X5.8+X3.9 | 9 | -412 nT | Direct measurement |
 | Oct 2024 Storm | 10–11 Oct 2024 | 1100 km/s | X9.0 | 9 | -518 nT | Direct measurement |
+| Quebec 1989 | 13 Mar 1989 | 2000 km/s | X15 | 9.0 | -589 nT | Reconstructed (labeled as such in-app) |
 
-**Deliverable:** Each event as a `.json` in `src/data/` with an extra `_meta` field:
+**Deliverable format** (already in place): each event is a `.json` in `src/data/` with an extra `_meta` field:
 ```json
 {
   "cmeSpeed": 800,
@@ -38,7 +34,7 @@ This document assigns concrete tasks to each role. The solo-built **Engine** (da
 }
 ```
 
-**Important:** Label each event's confidence: `"direct"` (spacecraft), `"partial"` (reconstructed), `"historical"` (ice-core/record). This honesty is a differentiator vs. SON and SolarShield.
+**Important:** Each event's confidence is labeled: `"direct"` (spacecraft), `"partial"` (reconstructed), `"historical"` (ice-core/record). This honesty is a differentiator vs. SON and SolarShield.
 
 ---
 
@@ -46,17 +42,39 @@ This document assigns concrete tasks to each role. The solo-built **Engine** (da
 
 **Goal:** Make the app usable by blind/low-vision users and pass WCAG AA.
 
-**Files to modify:**
-- `app/globals.css` — contrast fixes, `prefers-reduced-motion` media query
-- `src/components/dashboard/Dashboard.tsx` — ARIA labels, focus states, skip link
-- `src/components/visual/FrequencyVisualizer.tsx` — already has reduced-motion support (see line ~15)
-- `src/components/audio/AudioEngine.tsx` — already has `aria-live` regions
+**Status: 🟡 IN PROGRESS** — see "Done" vs "Remaining" below.
 
-**Specific tasks:**
+**Files:**
+- `app/globals.css` — `:focus-visible` outline + `prefers-reduced-motion` ready
+- `src/components/dashboard/Dashboard.tsx` — ARIA labels, focus states
+- `src/components/visual/FrequencyVisualizer.tsx` — reduced-motion support (line ~57, ~103)
+- `src/components/visual/AudioVisualizer.tsx` — reduced-motion support (renders nothing when reduced)
+- `src/hooks/useReducedMotion.ts` — reusable media-query hook
 
-1. **Contrast audit** — current failures:
-   - `text-slate-500` on `bg-slate-950` in footer = ~3.9:1 (fails AA for normal text). Fix: use `text-slate-400` or lighter.
-   - Gradient title has no solid fallback — add `text-slate-100` as fallback before `text-transparent`.
+**Done:**
+- ✅ `:focus-visible` outline on all interactive elements (globals.css lines 38–41)
+- ✅ `role="alert" aria-live="assertive"` on the blackout banner (app/page.tsx:203)
+- ✅ Volume sliders carry `aria-label="Master volume"` + visible `%` readout (`aria-hidden`)
+- ✅ `prefers-reduced-motion` respected by both canvas visualizers + AudioEngine
+- ✅ sr-only storm-intensity announcement block removed — storm intensity and blackout
+      alerts are now surfaced visually by the player-bar `AudioVisualizer` instead
+
+**Remaining:**
+1. **Skip-to-content link** — not yet present. Add to `app/page.tsx`:
+   ```tsx
+   <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 z-50 px-4 py-2 bg-cyan-600 text-white rounded">
+     Skip to main content
+   </a>
+   ```
+   and `id="main-content"` on the `<main>` element.
+2. **Contrast audit** — one known failure: `text-slate-500` on `bg-slate-950` in
+   `Dashboard.tsx` (line 126) ≈ 3.9:1, fails AA for normal text. Fix: use `text-slate-400` or lighter.
+3. **Screen-reader test** (NVDA/VoiceOver) — confirm:
+   - Play/Stop button announces state change
+   - Volume slider announces value
+   - Blackout alert announces via `aria-live`
+   - Simulation toggle announces mode change
+   - "What You're Hearing" legend is navigable
 
 2. **Add skip-to-content link** at top of `Dashboard.tsx`:
    ```tsx
@@ -95,6 +113,8 @@ This document assigns concrete tasks to each role. The solo-built **Engine** (da
 ## Role 3: Storyteller — NASA Portal Entry + Pitch Deck
 
 **Goal:** Write the submission materials. Deadline: tomorrow 23:59.
+
+**Status: 🟡 NOT STARTED** — both deliverables are open. Draft below is ready to paste into the NASA portal and Slides.
 
 **Deliverables:**
 

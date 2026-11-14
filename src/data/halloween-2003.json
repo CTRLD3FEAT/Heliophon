@@ -5,12 +5,16 @@
   "stormIntensity": 1.0,
   "isBlackoutRisk": true,
   "timestamp": "2003-10-28T11:00:00.000Z",
+  "cmeDirection": "Earth-directed",
+  "activeRegion": "10486",
+  "flarePeakTime": "2003-10-28T11:13:00.000Z",
+  "cmeHalfAngle": 360,
   "_meta": {
     "name": "Halloween Storms 2003",
-    "date": "28 October – 4 November 2003",
+    "date": "28 October \u2013 4 November 2003",
     "confidence": "direct",
     "notes": "Series of 17 major flares including X17.2 and X10. First time NASA satellites captured full CME-to-impact sequence. Caused satellite anomalies, airline rerouting, power grid stress in Sweden.",
     "dst": -383,
-    "impact": "Rerouted polar flights, damaged satellite instruments, caused blackout in Malmö Sweden, GPS errors up to 50m"
+    "impact": "Rerouted polar flights, damaged satellite instruments, caused blackout in Malm\u00f6 Sweden, GPS errors up to 50m"
   }
 }

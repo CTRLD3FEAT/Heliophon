@@ -5,9 +5,10 @@
   "stormIntensity": 1.0,
   "isBlackoutRisk": true,
   "timestamp": "2024-10-10T12:00:00.000Z",
+  "cmeDirection": "Earth-directed",
   "_meta": {
     "name": "October 2024 Storm",
-    "date": "10–11 October 2024",
+    "date": "10\u201311 October 2024",
     "confidence": "direct",
     "notes": "Second G5 in 2024. X9.0 flare from AR3848. Fast CME arrival (~34 hours). Demonstrated improved forecasting lead time vs. historical events.",
     "dst": -518,
