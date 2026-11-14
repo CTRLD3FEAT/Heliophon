@@ -1,0 +1,16 @@
+{
+  "cmeSpeed": 2000,
+  "flareClass": "X45",
+  "kpIndex": 9,
+  "stormIntensity": 1.0,
+  "isBlackoutRisk": true,
+  "timestamp": "1859-09-01T12:00:00.000Z",
+  "_meta": {
+    "name": "Carrington Event 1859",
+    "date": "1–2 September 1859",
+    "confidence": "historical",
+    "notes": "Largest recorded geomagnetic storm. Aurora seen at tropical latitudes. Telegraph systems failed globally. Estimated from ice-core nitrate spikes and historical records.",
+    "dst": -1600,
+    "impact": "Telegraph lines sparked, fires in telegraph offices, aurora bright enough to read newspaper at midnight in Boston"
+  }
+}

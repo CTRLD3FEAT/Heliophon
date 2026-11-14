@@ -4,5 +4,13 @@
   "kpIndex": 9.0,
   "stormIntensity": 1.0,
   "isBlackoutRisk": true,
-  "timestamp": "1989-03-13T08:00:00.000Z"
+  "timestamp": "1989-03-13T08:00:00.000Z",
+  "_meta": {
+    "name": "Quebec 1989 Blackout",
+    "date": "13 March 1989",
+    "confidence": "direct",
+    "notes": "Hydro-Québec grid collapse. 6 million people lost power for 9+ hours. Caused by GICs from a CME impact at 2000 km/s. First major grid blackout attributed to space weather.",
+    "dst": -589,
+    "impact": "Complete grid collapse in Quebec, transformer damage in NJ/US, satellite anomalies, aurora to Texas/Florida"
+  }
 }

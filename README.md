@@ -4,6 +4,25 @@ An **accessible space weather sonification** built for the **NASA Space Apps Cha
 
 We turn NASA and NOAA space weather data into sound so operators can *hear* the state of the grid before something goes wrong. The story is told from the ground up: what reaches the power grid, the satellites, and the GPS you depend on.
 
+## 🗺️ Regional Impact
+
+A **regional impact map** is planned but not yet built — this is a known MVP gap. For now, regional consequences are surfaced two ways:
+
+- **Historical events** (left sidebar) each carry a documented `_meta.impact` string (e.g. "Complete grid collapse in Quebec, transformer damage in NJ/US").
+- **Ground impacts** panel (right sidebar) shows aggregate severity bars for power grids (GICs), satellites (drag), GPS (scintillation), and aviation (HF blackout), derived from the live Kp-index and flare class.
+
+## 📚 Historical Event Library
+
+Five documented storms are available in the sidebar for offline replay:
+
+| Event | Date | CME Speed | Flare | Kp | Dst | Confidence |
+|-------|------|-----------|-------|----|-----|------------|
+| Carrington 1859 | 1–2 Sep 1859 | ~2,000 km/s | X45 | 9 | −1,600 nT | historical |
+| Quebec 1989 | 13 Mar 1989 | 2,000 km/s | X15 | 9.0 | −589 nT | direct |
+| Halloween 2003 | 28 Oct–4 Nov 2003 | 1,850 km/s | X17.2 | 9 | −383 nT | direct |
+| May 2024 | 10–11 May 2024 | 800 km/s | X5.8 | 9 | −412 nT | direct |
+| October 2024 | 10–11 Oct 2024 | 1,100 km/s | X9.0 | 9 | −518 nT | direct |
+
 ## 🎵 What You're Hearing
 
 The sound is a **perceptual sonification** — a documented design choice, not a physical measurement. We do not issue alerts; we communicate NOAA SWPC data.
@@ -37,7 +56,7 @@ npm run dev
 ```
 
 Click **▶ Play Space Weather** to start audio (browser requires a user gesture).
-Toggle **🧪 Simulate 1989 Quebec Storm** to replay the historic event offline — this guarantees a reliable demo even when the live APIs are down.
+Select any of the five historical storms in the left sidebar to replay them offline — this guarantees a reliable demo even when the live APIs are down.
 
 ## 📡 Data Sources
 
@@ -59,11 +78,18 @@ src/
 ├── app/page.tsx                 # Entry: data fetch, simulation toggle, loading/error states
 ├── components/
 │   ├── audio/AudioEngine.tsx    # Tone.js synthesis + useAudioEngine hook
-│   ├── visual/FrequencyVisualizer.tsx  # Canvas waveform visualization
-│   └── dashboard/Dashboard.tsx  # Telemetry cards, risk grid, audio controls
+│   ├── visual/
+│   │   ├── AudioVisualizer.tsx  # Player-bar live waveform visualizer
+│   │   ├── CosmicAnimation.tsx  # Sun-Earth canvas (CME, magnetosphere, aurora)
+│   │   └── FrequencyVisualizer.tsx  # Dashboard frequency spectrum
+│   ├── dashboard/Dashboard.tsx  # Telemetry cards, risk grid, audio controls
+│   └── ui/
+│       └── EventSidebar.tsx     # Historical event selector + expanded details
+├── hooks/
+│   └── useReducedMotion.ts      # prefers-reduced-motion media-query hook
 ├── lib/nasa-api.ts              # DONKI + NOAA fetchers, G-scale scoring, fallbacks
 ├── types/index.ts               # SpaceWeatherEvent contract
-└── data/                        # mock-storm.json, quebec-1989.json
+└── data/                        # mock-storm.json + 5 historical events
 ```
 
 **Contract-first design**: `SpaceWeatherEvent` is the single interface every component consumes. Teams can work in parallel against this contract.

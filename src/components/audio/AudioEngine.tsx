@@ -12,6 +12,15 @@ interface AudioEngineProps {
   onAudioReady?: () => void;
 }
 
+// Disaster probability thresholds for distinct audio cues
+interface DisasterProbabilities {
+  gridBlackout: number;      // G3+ geomagnetic storm
+  gpsDisruption: number;     // Ionospheric scintillation
+  satelliteDrag: number;     // Enhanced atmospheric drag
+  radiationRisk: number;     // SEP / proton events
+  commsBlackout: number;     // HF radio blackout (flare)
+}
+
 /**
  * AudioEngine — space weather sonification.
  *
@@ -42,7 +51,21 @@ export function AudioEngine({ data, isPlaying, volume, isSimulation, onAudioRead
   const filterRef = useRef<Tone.Filter | null>(null);
   const masterGainRef = useRef<Tone.Gain | null>(null);
   const alertSynthRef = useRef<Tone.Synth | null>(null);
-  const lastAlertRef = useRef(false);
+
+  // Disaster-specific audio nodes
+  const gridAlertSynthRef = useRef<Tone.PolySynth | null>(null);       // Deep, ominous
+  const gpsAlertSynthRef = useRef<Tone.Synth | null>(null);            // High, glitchy
+  const satelliteAlertSynthRef = useRef<Tone.Synth | null>(null);      // Descending tone
+  const radiationAlertSynthRef = useRef<Tone.NoiseSynth | null>(null); // Noise burst
+  const commsAlertSynthRef = useRef<Tone.Synth | null>(null);          // Stuttering
+
+  const lastAlertRef = useRef({
+    grid: false,
+    gps: false,
+    satellite: false,
+    radiation: false,
+    comms: false,
+  });
   const [error, setError] = useState<string | null>(null);
 
   // Initialize audio on first Play click (user gesture required for Tone.start)
@@ -92,10 +115,41 @@ export function AudioEngine({ data, isPlaying, volume, isSimulation, onAudioRead
         droneGainRef.current.connect(filterRef.current);
         droneOscRef.current.start();
 
-        // Alert motif synth
+        // Alert motif synth (legacy - kept for backward compatibility)
         alertSynthRef.current = new Tone.Synth({
           oscillator: { type: 'square' },
           envelope: { attack: 0.01, decay: 0.3, sustain: 0, release: 1 }
+        }).connect(masterGainRef.current);
+
+        // Disaster-specific alert synths
+        // Grid blackout: deep minor chord, slow decay
+        gridAlertSynthRef.current = new Tone.PolySynth(Tone.Synth, {
+          oscillator: { type: 'triangle' },
+          envelope: { attack: 0.1, decay: 1.5, sustain: 0.1, release: 2 }
+        }).connect(masterGainRef.current);
+
+        // GPS disruption: high-pitched glitchy FM tones
+        gpsAlertSynthRef.current = new Tone.Synth({
+          oscillator: { type: 'sine' },
+          envelope: { attack: 0.005, decay: 0.1, sustain: 0, release: 0.2 }
+        }).connect(masterGainRef.current);
+
+        // Satellite drag: descending frequency glide
+        satelliteAlertSynthRef.current = new Tone.Synth({
+          oscillator: { type: 'sawtooth' },
+          envelope: { attack: 0.05, decay: 1, sustain: 0.2, release: 1.5 }
+        }).connect(masterGainRef.current);
+
+        // Radiation risk: filtered noise bursts
+        radiationAlertSynthRef.current = new Tone.NoiseSynth({
+          noise: { type: 'brown' },
+          envelope: { attack: 0.01, decay: 0.3, sustain: 0, release: 0.5 }
+        }).connect(masterGainRef.current);
+
+        // Comms blackout: stuttering square wave
+        commsAlertSynthRef.current = new Tone.Synth({
+          oscillator: { type: 'square' },
+          envelope: { attack: 0.001, decay: 0.05, sustain: 0, release: 0.1 }
         }).connect(masterGainRef.current);
       } catch (e) {
         console.error('Audio init failed:', e);
@@ -121,17 +175,46 @@ export function AudioEngine({ data, isPlaying, volume, isSimulation, onAudioRead
       mounted = false;
       // Dispose all nodes
       [mainOscRef, droneOscRef, lfoRef, mainGainRef, droneGainRef,
-       filterRef, masterGainRef, alertSynthRef].forEach(r => {
+       filterRef, masterGainRef, alertSynthRef,
+       gridAlertSynthRef, gpsAlertSynthRef, satelliteAlertSynthRef,
+       radiationAlertSynthRef, commsAlertSynthRef].forEach(r => {
         try { r.current?.dispose(); } catch (_) {}
       });
     };
   }, [isPlaying]);
+
+  // Compute disaster probabilities from data
+  const computeDisasterProbabilities = (data: SpaceWeatherEvent): DisasterProbabilities => {
+    const { kpIndex, flareClass, stormIntensity, cmeSpeed } = data;
+
+    // Grid blackout: G3+ (Kp >= 7) geomagnetic storm
+    const gridBlackout = kpIndex >= 7 ? Math.min(1, (kpIndex - 6) / 3) : 0;
+
+    // GPS disruption: ionospheric scintillation at G2+ (Kp >= 6) or strong flares
+    const flarePrefix = flareClass[0];
+    const gpsDisruption = kpIndex >= 6
+      ? Math.min(1, (kpIndex - 5) / 4)
+      : (flarePrefix === 'X' || flarePrefix === 'M') ? 0.4 : 0;
+
+    // Satellite drag: enhanced atmospheric drag at G2+ (Kp >= 6)
+    const satelliteDrag = kpIndex >= 6 ? Math.min(1, (kpIndex - 5) / 4) : 0;
+
+    // Radiation risk: SEP/proton events from X-class flares or fast CMEs
+    const radiationRisk = (flarePrefix === 'X' ? 0.6 : flarePrefix === 'M' ? 0.2 : 0) +
+                         (cmeSpeed > 1500 ? 0.3 : cmeSpeed > 1000 ? 0.15 : 0);
+
+    // Comms blackout: HF radio blackout from M/X-class flares on sunlit side
+    const commsBlackout = flarePrefix === 'X' ? 0.8 : flarePrefix === 'M' ? 0.5 : 0;
+
+    return { gridBlackout, gpsDisruption, satelliteDrag, radiationRisk, commsBlackout };
+  };
 
   // Update sonic parameters when telemetry or volume changes
   useEffect(() => {
     if (!isPlaying) return;
 
     const { stormIntensity, cmeSpeed, kpIndex, isBlackoutRisk } = data;
+    const disasterProbs = computeDisasterProbabilities(data);
 
     // --- Perceptual sonification. Each dimension maps to a distinct sonic axis ---
     // Pitch (exponential)  : storm energy — 100 Hz quiet → 800 Hz extreme
@@ -146,7 +229,6 @@ export function AudioEngine({ data, isPlaying, volume, isSimulation, onAudioRead
     if (droneOscRef.current) droneOscRef.current.frequency.rampTo(baseFreq * 0.5, 0.5);
     if (lfoRef.current) {
       lfoRef.current.frequency.rampTo(pulseRate, 0.3);
-      // Set LFO depth directly — using rampTo on a number property can click
       lfoRef.current.max = lfoDepth;
     }
     if (filterRef.current) filterRef.current.frequency.rampTo(filterFreq, 0.5);
@@ -154,30 +236,67 @@ export function AudioEngine({ data, isPlaying, volume, isSimulation, onAudioRead
     // Master volume
     if (masterGainRef.current) masterGainRef.current.gain.rampTo(volume, 0.2);
 
-    // Alert motif on G3+ transition (false → true)
-    if (isBlackoutRisk && !lastAlertRef.current && alertSynthRef.current) {
+    // Legacy alert motif on G3+ transition
+    if (isBlackoutRisk && !lastAlertRef.current.grid && alertSynthRef.current) {
       const notes = ['C5', 'E5', 'G5', 'C6'];
       const t = Tone.now();
       notes.forEach((note, i) => {
         alertSynthRef.current?.triggerAttackRelease(note, '16n', t + i * 0.15);
       });
     }
-    lastAlertRef.current = isBlackoutRisk;
+    lastAlertRef.current.grid = isBlackoutRisk;
+
+    // --- Disaster-specific audio cues ---
+    const t = Tone.now();
+
+    // Grid blackout: deep minor chord (C3-Eb3-G3-C4) - ominous, slow
+    if (disasterProbs.gridBlackout > 0.5 && !lastAlertRef.current.grid && gridAlertSynthRef.current) {
+      const notes = ['C3', 'Eb3', 'G3', 'C4'];
+      notes.forEach((note, i) => {
+        gridAlertSynthRef.current?.triggerAttackRelease(note, '2n', t + i * 0.3);
+      });
+    }
+
+    // GPS disruption: high-pitched glitchy FM trills (C7-D7-E7-F7-G7)
+    if (disasterProbs.gpsDisruption > 0.4 && !lastAlertRef.current.gps && gpsAlertSynthRef.current) {
+      const notes = ['C7', 'D7', 'E7', 'F7', 'G7'];
+      notes.forEach((note, i) => {
+        gpsAlertSynthRef.current?.triggerAttackRelease(note, '64n', t + i * 0.05);
+      });
+    }
+
+    // Satellite drag: descending sawtooth glide (G5 down to C4)
+    if (disasterProbs.satelliteDrag > 0.4 && !lastAlertRef.current.satellite && satelliteAlertSynthRef.current) {
+      satelliteAlertSynthRef.current?.triggerAttackRelease('G5', '2n', t);
+      satelliteAlertSynthRef.current?.oscillator?.frequency?.rampTo(261.63, 1.5, t + 0.1); // C4
+    }
+
+    // Radiation risk: brown noise bursts
+    if (disasterProbs.radiationRisk > 0.3 && !lastAlertRef.current.radiation && radiationAlertSynthRef.current) {
+      radiationAlertSynthRef.current?.triggerAttackRelease('8n', t);
+      radiationAlertSynthRef.current?.triggerAttackRelease('8n', t + 0.3);
+      radiationAlertSynthRef.current?.triggerAttackRelease('8n', t + 0.6);
+    }
+
+    // Comms blackout: stuttering square wave pattern
+    if (disasterProbs.commsBlackout > 0.4 && !lastAlertRef.current.comms && commsAlertSynthRef.current) {
+      for (let i = 0; i < 8; i++) {
+        commsAlertSynthRef.current?.triggerAttackRelease('A5', '32n', t + i * 0.12);
+      }
+    }
+
+    // Update last alert state
+    lastAlertRef.current = {
+      grid: disasterProbs.gridBlackout > 0.5,
+      gps: disasterProbs.gpsDisruption > 0.4,
+      satellite: disasterProbs.satelliteDrag > 0.4,
+      radiation: disasterProbs.radiationRisk > 0.3,
+      comms: disasterProbs.commsBlackout > 0.4,
+    };
   }, [data, isPlaying, volume]);
 
-  return (
-    <div className="sr-only" aria-live={data.isBlackoutRisk ? 'assertive' : 'polite'}>
-      {error && <p role="alert">{error}</p>}
-      <p>
-        Space weather audio: {isPlaying ? '🔊 Playing' : '🔇 Paused'}.
-        Storm intensity: {Math.round(data.stormIntensity * 100)}%.
-        {data.isBlackoutRisk && ' BLACKOUT ALERT ACTIVE.'}
-      </p>
-      <p>
-        Data source: {isSimulation
-          ? 'Quebec 1989 historical reconstruction'
-          : 'NASA DONKI and NOAA SWPC live telemetry'}.
-      </p>
-    </div>
-  );
+  // Audio engine is headless — no visible UI. Storm intensity and blackout
+  // alerts are surfaced visually by the player's live audio visualizer,
+  // so this component renders nothing to the DOM.
+  return null;
 }
