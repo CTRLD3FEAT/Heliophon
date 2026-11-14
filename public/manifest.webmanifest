@@ -1,0 +1,16 @@
+{
+  "name": "Solar Jukebox",
+  "short_name": "Solar Jukebox",
+  "description": "Accessible space weather sonification — hear the state of the grid from NASA and NOAA data.",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#020617",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

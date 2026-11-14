@@ -1,0 +1,9 @@
+{
+  "cmeSpeed": 1250,
+  "flareClass": "X2.1",
+  "kpIndex": 8.3,
+  "stormIntensity": 0.875,
+  "isBlackoutRisk": true,
+  "timestamp": "2026-11-14T01:35:00.000Z",
+  "_note": "Cached fallback. Not a live reading. Kp 8.3 = NOAA G4 severe storm."
+}
