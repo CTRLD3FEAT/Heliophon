@@ -15,6 +15,9 @@ export interface SpaceWeatherEvent {
   flarePeakTime?: string;        // ISO timestamp of flare peak
   activeRegion?: string;         // NOAA active region number, e.g. "12673"
 
+  // --- Live NOAA data ---
+  dst?: number;                  // Disturbance Storm Time index (nT), negative = storm
+
   // Carried from fetchSpaceVitals when one or more live sources failed.
   // Lets the UI surface "live data unavailable" instead of a silent zeroed storm.
   _sourceErrors?: string[];

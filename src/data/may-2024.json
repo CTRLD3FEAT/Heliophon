@@ -1,8 +1,8 @@
 {
   "cmeSpeed": 800,
   "flareClass": "X5.8",
-  "kpIndex": 9,
-  "stormIntensity": 1.0,
+  "kpIndex": 8,
+  "stormIntensity": 0.875,
   "isBlackoutRisk": true,
   "timestamp": "2024-05-10T12:00:00.000Z",
   "cmeDirection": "Earth-directed",
@@ -13,7 +13,7 @@
     "name": "May 2024 Superstorm",
     "date": "10\u201311 May 2024",
     "confidence": "direct",
-    "notes": "First G5 storm since 2003. Multiple CMEs merged en route (cannibal CME). Aurora visible to 26\u00b0 magnetic latitude \u2014 seen in Florida, Mexico, Spain. Best-observed extreme storm in history.",
+    "notes": "G4 storm (Kp 8 peak). Multiple CMEs merged en route (cannibal CME). Aurora visible to 26\u00b0 magnetic latitude \u2014 seen in Florida, Mexico, Spain. Best-observed severe storm in history.",
     "dst": -412,
     "impact": "Widespread aurora to low latitudes, GPS degradation for precision agriculture, some satellite drag anomalies, no major grid damage due to preparedness"
   }

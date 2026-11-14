@@ -33,6 +33,8 @@ interface CelestialBody {
   glowColor: string;
 }
 
+// Add color/glowColor to sun
+
 interface Particle {
   x: number;
   y: number;
@@ -64,57 +66,61 @@ export function CosmicAnimation({
   const sun = useMemo((): CelestialBody => ({
     x: 0,
     y: 0,
-    radius: 38, // Wireframe: 38px radius (from SVG: r="38")
+    radius: 38,
     angle: 0,
     distance: 0,
     speed: 0,
-    color: '#D9D9D3',
-    glowColor: '#1D4ED8',
+    color: '#FF4400',       // Bright orange-red (photosphere)
+    glowColor: '#FF0000',   // Intense red glow (chromosphere/corona)
   }), []);
+
+  // Realistic planet data (Earth = 1 AU = 185px, radius 9px baseline)
+  const EARTH_DISTANCE = 185;
+  const EARTH_RADIUS = 9;
+  const BASE_SPEED = 0.000375; // Earth angular velocity (slowed for visual)
 
   const earth = useMemo((): CelestialBody => ({
     x: 0,
     y: 0,
-    radius: 9, // Wireframe: 9px radius (from SVG: r="9")
+    radius: EARTH_RADIUS,
     angle: 0,
-    distance: 185, // Wireframe: Earth at ~185px from center (between r=120 and r=250)
-    speed: 0.0005,
-    color: '#fff',
-    glowColor: '#1A1A1A',
+    distance: EARTH_DISTANCE,                    // 1.00 AU
+    speed: BASE_SPEED * 1.0,                     // 365 days
+    color: '#4A90E2',       // Blue-white (oceans)
+    glowColor: '#1E3A5F',
   }), []);
 
-  // Other planets from wireframe
   const mercury = useMemo((): CelestialBody => ({
     x: 0,
     y: 0,
-    radius: 5,
+    radius: Math.round(EARTH_RADIUS * 0.38),     // 0.38 Earth radii
     angle: 0,
-    distance: 70, // Wireframe: r="70"
-    speed: 0.002,
-    color: '#fff',
-    glowColor: '#1A1A1A',
+    distance: Math.round(EARTH_DISTANCE * 0.39), // 0.39 AU
+    speed: BASE_SPEED * 4.15,                    // 88 days
+    color: '#A0A0A0',       // Dark gray
+    glowColor: '#606060',
   }), []);
 
   const venus = useMemo((): CelestialBody => ({
     x: 0,
     y: 0,
-    radius: 7,
+    radius: Math.round(EARTH_RADIUS * 0.95),     // 0.95 Earth radii
     angle: 0,
-    distance: 120, // Wireframe: r="120"
-    speed: 0.001,
-    color: '#fff',
-    glowColor: '#1A1A1A',
+    distance: Math.round(EARTH_DISTANCE * 0.72), // 0.72 AU
+    speed: BASE_SPEED * 1.63,                    // 225 days
+    color: '#E6C87A',       // Yellowish-white (clouds)
+    glowColor: '#B8954A',
   }), []);
 
   const mars = useMemo((): CelestialBody => ({
     x: 0,
     y: 0,
-    radius: 6,
+    radius: Math.round(EARTH_RADIUS * 0.53),     // 0.53 Earth radii
     angle: 0,
-    distance: 250, // Wireframe: r="250"
-    speed: 0.0003,
-    color: '#fff',
-    glowColor: '#1A1A1A',
+    distance: Math.round(EARTH_DISTANCE * 1.52), // 1.52 AU
+    speed: BASE_SPEED * 0.53,                    // 687 days
+    color: '#D94A2B',       // Red-orange
+    glowColor: '#8B2A1A',
   }), []);
 
   const stormIntensity = data.stormIntensity;
@@ -237,9 +243,14 @@ export function CosmicAnimation({
         mars.x = cx + Math.cos(mars.angle) * mars.distance;
         mars.y = cy + Math.sin(mars.angle) * mars.distance;
 
-        // Draw orbits (4 rings from wireframe: 70, 120, 185, 250)
+        // Draw orbits at actual planet distances
         if (showOrbits) {
-          const orbitRadii = [70, 120, 185, 250];
+          const orbitRadii = [
+            mercury.distance,  // ~72px (0.39 AU)
+            venus.distance,    // ~133px (0.72 AU)
+            earth.distance,    // 185px (1.00 AU)
+            mars.distance      // ~281px (1.52 AU)
+          ];
           ctx.strokeStyle = '#8A8A85';
           ctx.lineWidth = 1;
           ctx.setLineDash([4, 5]);
@@ -273,14 +284,14 @@ export function CosmicAnimation({
           }
         }
 
-        // Draw Sun
-        drawSunWireframe(ctx, cx, cy, timestamp, stormIntensity, isBlackoutRisk);
+        // Draw Sun with realistic color
+        drawSunWireframe(ctx, cx, cy, timestamp, stormIntensity, isBlackoutRisk, sun.color, sun.glowColor);
 
-        // Draw planets
-        drawPlanet(ctx, mercury, showLabels, 'Mercury', 386, 190);
-        drawPlanet(ctx, venus, showLabels, 'Venus', 326, 362);
-        drawPlanet(ctx, earth, showLabels, 'Earth', 560, 300);
-        drawPlanet(ctx, mars, showLabels, 'Mars', 602, 96);
+        // Draw planets with dynamic labels
+        drawPlanet(ctx, mercury, showLabels, 'Mercury');
+        drawPlanet(ctx, venus, showLabels, 'Venus');
+        drawPlanet(ctx, earth, showLabels, 'Earth');
+        drawPlanet(ctx, mars, showLabels, 'Mars');
 
         // Draw CME cone
         if (showCmeCone && cmeSpeed > 300) {
@@ -350,27 +361,38 @@ function drawSunWireframe(
   cy: number,
   timestamp: number,
   stormIntensity: number,
-  isBlackoutRisk: boolean
+  isBlackoutRisk: boolean,
+  sunColor: string = '#FF4400',
+  sunGlowColor: string = '#FF0000'
 ) {
-  // Sun circle (wireframe: r=38, fill=#D9D9D3, stroke=#1A1A1A, stroke-width=1.5)
+  // Sun circle with gradient - bright white center, orange-red photosphere, red corona
+  const sunGradient = ctx.createRadialGradient(
+    cx - 38 * 0.3, cy - 38 * 0.3, 0,
+    cx, cy, 38
+  );
+  sunGradient.addColorStop(0, '#FFFFFF');     // Bright white center (core)
+  sunGradient.addColorStop(0.3, '#FFF8E7');   // Near-white inner
+  sunGradient.addColorStop(0.6, sunColor);    // Orange-red photosphere
+  sunGradient.addColorStop(1, sunGlowColor);  // Red corona edge
+
   ctx.beginPath();
   ctx.arc(cx, cy, 38, 0, Math.PI * 2);
-  ctx.fillStyle = '#D9D9D3';
+  ctx.fillStyle = sunGradient;
   ctx.fill();
   ctx.strokeStyle = '#1A1A1A';
   ctx.lineWidth = 1.5;
   ctx.stroke();
 
-  // Sun corona/pulse effect for storms
+  // Sun corona/pulse effect for storms - red/orange flare
   if (stormIntensity > 0.3 || isBlackoutRisk) {
     const pulseScale = 1 + Math.sin(timestamp * 0.002) * 0.05 + stormIntensity * 0.15;
     const radius = 38 * pulseScale;
 
     const coronaGradient = ctx.createRadialGradient(cx, cy, 38, cx, cy, radius * 2);
     const intensity = 0.1 + stormIntensity * 0.2;
-    coronaGradient.addColorStop(0, `rgba(29, 78, 216, ${intensity})`);
-    coronaGradient.addColorStop(0.5, `rgba(29, 78, 216, ${intensity * 0.4})`);
-    coronaGradient.addColorStop(1, 'rgba(29, 78, 216, 0)');
+    coronaGradient.addColorStop(0, `rgba(255, 68, 0, ${intensity})`);
+    coronaGradient.addColorStop(0.5, `rgba(255, 0, 0, ${intensity * 0.4})`);
+    coronaGradient.addColorStop(1, 'rgba(255, 0, 0, 0)');
 
     ctx.beginPath();
     ctx.arc(cx, cy, radius * 2, 0, Math.PI * 2);
@@ -393,25 +415,35 @@ function drawSunWireframe(
 
 function drawPlanet(
   ctx: CanvasRenderingContext2D,
-  planet: { x: number; y: number; radius: number },
+  planet: { x: number; y: number; radius: number; color?: string; glowColor?: string },
   showLabels: boolean,
-  name: string,
-  labelX: number,
-  labelY: number
+  name: string
 ) {
+  // Planet body with gradient
+  const gradient = ctx.createRadialGradient(
+    planet.x - planet.radius * 0.3, planet.y - planet.radius * 0.3, 0,
+    planet.x, planet.y, planet.radius
+  );
+  gradient.addColorStop(0, '#fff');
+  gradient.addColorStop(0.5, planet.color || '#fff');
+  gradient.addColorStop(1, planet.glowColor || '#888');
+
   ctx.beginPath();
   ctx.arc(planet.x, planet.y, planet.radius, 0, Math.PI * 2);
-  ctx.fillStyle = '#fff';
+  ctx.fillStyle = gradient;
   ctx.fill();
   ctx.strokeStyle = '#1A1A1A';
-  ctx.lineWidth = planet.radius === 9 ? 2 : 1.5; // Earth has thicker stroke
+  ctx.lineWidth = planet.radius >= 8 ? 2 : 1.5; // Earth has thicker stroke
   ctx.stroke();
 
   if (showLabels) {
+    // Position label dynamically: offset from planet, avoid overlap
+    const offsetX = planet.radius + 14;
+    const offsetY = planet.radius + 4;
     ctx.font = '11px "Inter", sans-serif';
     ctx.fillStyle = '#444';
     ctx.textAlign = 'left';
-    ctx.fillText(name, labelX, labelY);
+    ctx.fillText(name, planet.x + offsetX, planet.y + offsetY);
   }
 }
 
@@ -430,8 +462,19 @@ function drawCMECone(
   const earthAngle = Math.atan2(earth.y - cy, earth.x - cx);
   const sunToEarthDist = Math.sqrt((earth.x - cx) ** 2 + (earth.y - cy) ** 2);
 
-  // CME front progresses based on speed and time
-  const progress = Math.min(1, (Date.now() / 10000) * cmeVisualSpeed * 0.1) % 1;
+  // Real CME travel time: 1 AU = 149.6M km at cmeSpeed km/s
+  // Travel time in hours = 149.6e6 / cmeSpeed / 3600
+  const travelTimeHours = 149.6e6 / Math.max(300, cmeSpeed) / 3600; // hours
+
+  // Animation speed factor: 1 hour of real travel = X seconds of animation
+  // Default: 1 real hour = 2 animation seconds (30x speedup)
+  const animSpeedFactor = cmeVisualSpeed; // adjustable, default 2
+  const travelTimeMs = travelTimeHours * 3600 * 1000 / animSpeedFactor; // animation milliseconds
+
+  // Progress based on animation cycle time (loops continuously)
+  // Use a reference time to make it consistent
+  const cycleStartRef = Math.floor(Date.now() / travelTimeMs) * travelTimeMs;
+  const progress = Math.min(1, (Date.now() - cycleStartRef) / travelTimeMs);
   const cmeFrontDist = 38 + progress * (sunToEarthDist - 38);
 
   const cmeFrontX = cx + Math.cos(earthAngle) * cmeFrontDist;
@@ -488,15 +531,20 @@ function drawCMECone(
   ctx.lineWidth = 3;
   ctx.stroke();
 
-  // Arrival time label
+  // Arrival time label - shows real estimated time based on CME speed
   if (showLabels && cmeSpeed > 300) {
-    const etaMinutes = Math.max(1, Math.round((1 - progress) * 120));
+    const travelTimeHours = 149.6e6 / Math.max(300, cmeSpeed) / 3600; // hours
+    const etaHours = travelTimeHours * (1 - progress);
+    const etaMinutes = Math.max(1, Math.round(etaHours * 60));
+    const etaLabel = etaHours >= 1
+      ? `${Math.floor(etaHours)}h ${etaMinutes % 60}m`
+      : `${etaMinutes}m`;
     ctx.font = '11px "Inter", sans-serif';
     ctx.fillStyle = '#1D4ED8';
     ctx.textAlign = 'left';
     const labelX = cmeFrontX + 20;
     const labelY = cmeFrontY - 30;
-    ctx.fillText(`CME front · arrival in ${etaMinutes}m`, labelX, labelY);
+    ctx.fillText(`CME front · arrival in ${etaLabel}`, labelX, labelY);
   }
 }
 

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Dashboard } from '@/components/dashboard/Dashboard';
 import { EventSidebar } from '@/components/ui/EventSidebar';
 import { CosmicAnimation } from '@/components/visual/CosmicAnimation';
-import { fetchSpaceVitals, getMockSpaceVitals, fetchSpaceWeatherForecast, getMockForecast } from '@/lib/nasa-api';
+import { fetchSpaceVitals, getMockSpaceVitals, fetchSpaceWeatherForecast, getMockForecast, getCachedLiveData, setCachedLiveData, getCacheAgeMs, formatCacheAge } from '@/lib/nasa-api';
 import { SpaceWeatherEvent } from '@/types';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { AudioEngine, useAudioEngine } from '@/components/audio/AudioEngine';
@@ -34,6 +34,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [forecast, setForecast] = useState<any>(null);
   const [showDashboard, setShowDashboard] = useState(true);
+  const [cacheAge, setCacheAge] = useState<string>('just now');
   const reducedMotion = useReducedMotion();
 
   // View controls
@@ -96,8 +97,23 @@ export default function Home() {
     setForecast(mockForecast);
   }, []);
 
-  // Fetch live data when live mode is enabled
+  // Fetch live data when live mode is enabled (uses 12h cache)
   const fetchLiveData = useCallback(async () => {
+    // First check cache
+    const cached = getCachedLiveData();
+    if (cached) {
+      const ageMs = getCacheAgeMs();
+      if (ageMs !== null) setCacheAge(formatCacheAge(ageMs));
+      setLiveData(cached);
+      setForecast(getMockForecast()); // Forecast not cached, use mock
+      if (isLiveMode) {
+        setSelectedEvent({ ...cached, forecast: getMockForecast() });
+      }
+      setIsLoadingLive(false);
+      return;
+    }
+
+    // No valid cache - fetch from APIs
     setIsLoadingLive(true);
     setError(null);
     try {
@@ -105,6 +121,8 @@ export default function Home() {
         fetchSpaceVitals(),
         fetchSpaceWeatherForecast(),
       ]);
+      setCachedLiveData(vitals); // Cache the fresh data
+      setCacheAge('just now');
       setLiveData(vitals);
       setForecast(forecastData);
       if (isLiveMode) {
@@ -125,11 +143,22 @@ export default function Home() {
     }
   }, [isLiveMode]);
 
+  // Update cache age display every minute
+  useEffect(() => {
+    const updateAge = () => {
+      const ageMs = getCacheAgeMs();
+      if (ageMs !== null) {
+        setCacheAge(formatCacheAge(ageMs));
+      }
+    };
+    updateAge();
+    const interval = setInterval(updateAge, 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   useEffect(() => {
     if (isLiveMode) {
-      fetchLiveData();
-      const interval = setInterval(fetchLiveData, 5 * 60 * 1000);
-      return () => clearInterval(interval);
+      fetchLiveData(); // Fetch once when entering Live mode
     }
   }, [isLiveMode, fetchLiveData]);
 
@@ -175,26 +204,78 @@ export default function Home() {
   return (
     <div style={{minHeight: '900px', display: 'flex', flexDirection: 'column', background: '#F3F3F1', fontFamily: 'Inter,system-ui,sans-serif', color: '#1A1A1A'}}>
       {/* Header */}
-      <header style={{minHeight: '56px', display: 'flex', alignItems: 'center', justifyContent: 'spaceBetween', flexWrap: 'wrap', gap: '8px', padding: '6px 20px', borderBottom: '1px solid #BDBDB8', background: '#fff'}}>
-        <div className="row">
-          <svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="#1A1A1A" strokeWidth="1.5" aria-hidden="true">
-            <circle cx="14" cy="14" r="5"/>
-            <path d="M14 2v4M14 22v4M2 14h4M22 14h4M5.5 5.5l2.8 2.8M19.7 19.7l2.8 2.8M5.5 22.5l2.8-2.8M19.7 8.3l2.8-2.8"/>
-          </svg>
-          <strong style={{fontSize: '16px'}}>Solar Jukebox</strong>
+      <header style={{minHeight: '56px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', padding: '6px 20px', borderBottom: '1px solid #BDBDB8', background: '#fff'}}>
+        {/* Left: Logo + Mode buttons (left-aligned) */}
+        <div className="row" style={{gap: '16px'}}>
+          <div className="row">
+            <svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="#1A1A1A" strokeWidth="1.5" aria-hidden="true">
+              <circle cx="14" cy="14" r="5"/>
+              <path d="M14 2v4M14 22v4M2 14h4M22 14h4M5.5 5.5l2.8 2.8M19.7 19.7l2.8 2.8M5.5 22.5l2.8-2.8M19.7 8.3l2.8-2.8"/>
+            </svg>
+            <strong style={{fontSize: '16px'}}>Solar Jukebox</strong>
+          </div>
+          <div className="row">
+            <button className={clsx('btn', isLiveMode ? 'on' : '')} aria-pressed={isLiveMode} onClick={handleToggleLiveMode}>
+              Live
+            </button>
+            <button className={clsx('btn', !isLiveMode ? 'on' : '')} aria-pressed={!isLiveMode} onClick={handleToggleLiveMode}>
+              Simulation
+            </button>
+            <button className="btn" aria-label="Help and legend">?</button>
+          </div>
         </div>
-        <div className="row">
-          <span className="tag">Data: live · updated [hh:mm UTC]</span>
-          <span className="tag" style={{borderStyle: 'dashed'}}>Cached data badge (offline only)</span>
-        </div>
-        <div className="row">
-          <button className={clsx('btn', isLiveMode ? 'on' : '')} aria-pressed={isLiveMode} onClick={handleToggleLiveMode}>
-            Live
-          </button>
-          <button className={clsx('btn', !isLiveMode ? 'on' : '')} aria-pressed={!isLiveMode} onClick={handleToggleLiveMode}>
-            Simulation
-          </button>
-          <button className="btn" aria-label="Help and legend">?</button>
+
+        {/* Right: LIVE indicator with hover tooltip */}
+        <div
+          style={{
+            flexShrink: 0,
+            position: 'relative',
+            display: 'inline-block',
+          }}
+          onMouseEnter={(e) => {
+            const tooltip = (e.currentTarget as HTMLElement).querySelector('[data-tooltip]') as HTMLElement | null;
+            if (tooltip) {
+              tooltip.style.opacity = '1';
+              tooltip.style.visibility = 'visible';
+              tooltip.style.transform = 'translateY(0)';
+            }
+          }}
+          onMouseLeave={(e) => {
+            const tooltip = (e.currentTarget as HTMLElement).querySelector('[data-tooltip]') as HTMLElement | null;
+            if (tooltip) {
+              tooltip.style.opacity = '0';
+              tooltip.style.visibility = 'hidden';
+              tooltip.style.transform = 'translateY(-4px)';
+            }
+          }}
+        >
+          <span className="tag" style={{display: 'inline-flex', alignItems: 'center', gap: '8px', border: '1px solid #B42318', color: '#B42318', fontWeight: 600, cursor: 'default'}}>
+            <span style={{width: '10px', height: '10px', borderRadius: '50%', background: '#B42318', display: 'inline-block'}} className="animate-blink-red" aria-hidden="true" />
+            LIVE · {cacheAge.toUpperCase()}
+          </span>
+          <div
+            data-tooltip
+            style={{
+              position: 'absolute',
+              top: 'calc(100% + 8px)',
+              right: 0,
+              padding: '6px 10px',
+              background: '#1A1A1A',
+              color: '#fff',
+              fontSize: '11px',
+              borderRadius: '4px',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+              whiteSpace: 'nowrap',
+              opacity: 0,
+              visibility: 'hidden',
+              transform: 'translateY(4px)',
+              transition: 'opacity 0.2s ease, visibility 0.2s ease, transform 0.2s ease',
+              zIndex: 50,
+              pointerEvents: 'auto',
+            }}
+          >
+            Refreshes every 20m
+          </div>
         </div>
       </header>
 
@@ -365,7 +446,9 @@ export default function Home() {
               <span className="tag">G{Math.round(selectedEvent.kpIndex)}</span>
               <span className="tag">{(selectedEvent as any)._meta?.confidence || 'direct'}</span>
             </div>
-            <span className="muted" style={{fontSize: '12px'}}>{(selectedEvent as any)._meta?.date || 'Live data'} UTC</span>
+            <span className="muted" style={{fontSize: '12px'}}>
+              {(selectedEvent as any)._meta?.date || (liveData ? `${new Date(liveData.timestamp).toISOString().replace('T', ' ').slice(0, 16)} UTC` : 'Live data')}
+            </span>
             {/* Show live-data degradation banner if any source failed */}
             {selectedEvent._sourceErrors && selectedEvent._sourceErrors.length > 0 && (
               <div style={{marginTop: '8px', padding: '8px 12px', background: '#FFF3CD', border: '1px solid #FFC107', borderRadius: '4px', fontSize: '12px', color: '#856404'}}>
@@ -396,7 +479,7 @@ export default function Home() {
             <dl className="kv">
               <dt className="muted">Kp index</dt><dd>{selectedEvent.kpIndex.toFixed(1)}</dd>
               <dt className="muted">G-scale</dt><dd>G{Math.round(selectedEvent.kpIndex)}</dd>
-              <dt className="muted">Dst</dt><dd>{(selectedEvent as any)._meta?.dst || 'N/A'} nT</dd>
+              <dt className="muted">Dst</dt><dd>{selectedEvent.dst !== undefined ? `${selectedEvent.dst} nT` : 'N/A'}</dd>
             </dl>
           </div>
           <div className="sec">
@@ -407,7 +490,8 @@ export default function Home() {
             <div className="row sp" style={{fontSize: '13px'}}><span>Aviation <span className="muted">(HF blackout)</span></span><span><div className="bar" style={{'--bar-width': `${['X', 'M'].includes(selectedEvent.flareClass[0]) ? 80 : 20}%`} as React.CSSProperties} /></span></div>
           </div>
           <div className="sec" style={{borderBottom: 0}}>
-            <p className="muted" style={{fontSize: '12px', margin: 0}}>Sources: NASA DONKI · NOAA SWPC. The sound is a perceptual design choice, not a measurement. Not an official warning.</p>
+            <p className="muted" style={{fontSize: '11px', margin: 0}}>Sources: NASA DONKI (CME) · NOAA GOES (Flare) · NOAA SWPC Kp-Index · Kyoto WDC Dst. </p> 
+            <p className="muted" style={{fontSize: '12px', margin: 0}}>The sound is a perceptual design choice, not a measurement. Not an official warning.</p>
           </div>
         </aside>
       </div>

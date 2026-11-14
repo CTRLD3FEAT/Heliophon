@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { SpaceWeatherEvent } from '@/types';
-import { fetchSpaceVitals, getMockSpaceVitals } from '@/lib/nasa-api';
+import { getCacheAgeMs, formatCacheAge } from '@/lib/nasa-api';
 
 // Import all historical events
 import carrington1859 from '@/data/carrington-1859.json';
@@ -110,7 +110,14 @@ export function EventSidebar({
         <div className="mb-4 p-3 rounded-lg bg-slate-800/50 border border-slate-700/50">
           <div className="flex items-center gap-2 mb-2">
             <span className={`w-2 h-2 rounded-full ${isLoadingLive ? 'bg-yellow-400 animate-pulse' : liveData?._sourceErrors?.length ? 'bg-yellow-400' : 'bg-green-400'}`} />
-            <span className="text-sm font-medium text-slate-200">NASA/NOAA Live Feed</span>
+            <span className="text-sm font-medium text-slate-200">Live Feed</span>
+            <span className="text-xs text-slate-500 font-mono">DONKI · GOES · SWPC · Kyoto</span>
+            {liveData && !isLoadingLive && (
+              <span className="ml-auto flex items-center gap-1.5 text-xs font-mono text-red-400">
+                <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse" aria-hidden="true" />
+                <span>Live data UTC</span>
+              </span>
+            )}
           </div>
           {liveData && !isLoadingLive && (
             <div className="text-xs text-slate-400 space-y-1">
@@ -259,7 +266,7 @@ export function EventSidebar({
                   <h3 className="font-medium text-slate-100">Live Space Weather Now</h3>
                   {isLiveSelected() && <span className="text-cyan-400">▸</span>}
                 </div>
-                <p className="text-xs text-slate-500">Real-time NASA DONKI + NOAA SWPC</p>
+                <p className="text-xs text-slate-500">Real-time DONKI · GOES · SWPC · Kyoto WDC</p>
                 <div className="flex flex-wrap gap-1.5 mt-2">
                   <span className="px-2 py-0.5 rounded text-xs font-mono bg-red-500/20 text-red-400">
                     {liveData.flareClass}

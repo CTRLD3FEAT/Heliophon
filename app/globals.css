@@ -267,3 +267,12 @@ select {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.3; transform: scale(1.2); }
 }
+
+@keyframes blink-red {
+  0%, 100% { opacity: 1; background-color: #B42318; }
+  50% { opacity: 0.2; background-color: #F87171; }
+}
+
+.animate-blink-red {
+  animation: blink-red 1s ease-in-out infinite;
+}
