@@ -17,6 +17,7 @@ export interface SpaceWeatherEvent {
 
   // --- Live NOAA data ---
   dst?: number;                  // Disturbance Storm Time index (nT), negative = storm
+  protonFlux?: number;           // Proton flux (pfu), >10 MeV channel
 
   // Carried from fetchSpaceVitals when one or more live sources failed.
   // Lets the UI surface "live data unavailable" instead of a silent zeroed storm.

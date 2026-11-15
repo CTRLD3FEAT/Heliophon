@@ -22,44 +22,34 @@ Space weather storms — **CMEs, flares, geomagnetic storms** — threaten power
 
 ## 🎵 Sonification Design
 
-### Audio Architecture
+### Continuous Layers (5-layer FM Sonification)
 
-```mermaid
-flowchart LR
-    Data[Live Data] --> L1[Kp Bass]
-    Data --> L2[GOES Lead]
-    Data --> L3[Dst Rumble]
-    Data --> L4[CME Arp]
-    Data --> L5[Solar Wind]
-    L1 & L2 & L3 & L4 & L5 --> Audio[Output]
-    Data -.-> A1[Grid G3+]
-    Data -.-> A2[GPS Disrupt]
-    Data -.-> A3[Sat Drag]
-    Data -.-> A4[Radiation]
-    Data -.-> A5[Comms]
-```
+| Layer | What It Maps To | Sound Character |
+|-------|----------------|-----------------|
+| **Kp Bass Pad** | Kp-index 0–9 | Subby FM pad (C2 root), modulation index 0→10, lowpass 120→2000 Hz |
+| **GOES Lead Synth** | X-ray flare class (A–X) | Dual FM voices (C4 + G4 5th), FM index scales to X-flare brightness |
+| **Dst Sub-Bass** | Dst index (nT) | Ultra-low rumble (15–30 Hz), amplitude tracks |Dst| storm depth |
+| **CME Arpeggiator** | CME speed (km/s) | Sleek FM minor 9th arp, rate 0.2→4 Hz, lowpass 1.5→5 kHz |
+| **Solar Wind Texture** | Proton flux (pfu) | Filtered brown noise density & color |
 
-### Layer Mapping
-
-| Layer | Data | Sonic Mapping | Physical Meaning |
-|-------|------|---------------|------------------|
-| **Kp Bass** | Kp 0–9 | Pitch: C2→A2 (G0–G5) • Gain: +0.015/Kp | Geomagnetic storm → grid risk |
-| **GOES Lead** | Flare A→X | Wave: sine→square • Filter: 400→5000 Hz • Gain: 0.05→0.25 | Flare intensity → radio blackout |
-| **Dst Rumble** | Dst nT | Freq: 15→30 Hz • Amp: 0 at -20, max at -500 | Ring current → magnetosphere compression |
-| **CME Arp** | Speed km/s | Rate: 0.2→4 Hz (300→2000 km/s) • Triad C-E-G | Transit speed → arrival urgency |
-| **Solar Wind** | Proton pfu | Filter: 200→2200 Hz • Gain: log scale | Particle radiation → satellite risk |
-
-### Threshold Alerts
+### Event-Triggered Alerts (threshold-cross)
 
 | Alert | Trigger | Sound | Impact |
 |-------|---------|-------|--------|
-| **Grid Blackout** | Kp ≥ 7 (G3+) | Deep minor chord | Transformer GIC damage |
-| **GPS Disruption** | Kp ≥ 6 or M/X | Glitchy trills C7→C8 | Ionospheric scintillation |
-| **Satellite Drag** | Kp ≥ 6 | Descending saw G5→C4 | Thermospheric expansion |
+| **Grid Blackout** | G3+ (Kp ≥ 7) | Deep minor chord | Transformer GIC damage |
+| **GPS Disruption** | G2+ (Kp ≥ 6) or M/X | Glitchy trills C7→C8 | Ionospheric scintillation |
+| **Satellite Drag** | G2+ (Kp ≥ 6) | Descending glide | Thermospheric expansion |
 | **Radiation Risk** | X-flare or CME >1500 | Brown noise bursts | SEP hazard |
 | **Comms Blackout** | M/X flare | Stuttering square A5 | HF radio loss |
 
 > **Design principle**: Each stream owns a distinct sonic dimension (pitch, timbre, rhythm, texture, sub-bass). The brain separates them effortlessly — you hear all five simultaneously without cognitive overload.
+
+- **Kp Bass** maps to storm energy (fixed C2 root, FM harmonics).
+- **GOES Lead** brightness maps to X-ray flare class (dual FM voices).
+- **Dst Sub-Bass** amplitude maps to |Dst| storm depth.
+- **CME Arp** rate maps to CME speed (sleek minor 9th pattern).
+- **Solar Wind** density maps to proton flux.
+- Alerts fire once per threshold cross (debounced).
 
 ---
 
@@ -91,16 +81,6 @@ Distance = 1 AU = 149,600,000 km
 Time (hours) = Distance / CME_Speed / 3600
 ```
 
-| Event | CME Speed | Transit Time |
-|-------|-----------|--------------|
-| Live (current) | 327 km/s | ~127 h (5.3 days) |
-| May 2024 Superstorm | 800 km/s | ~52 h (2.2 days) |
-| Oct 2024 Storm | 1,100 km/s | ~38 h (1.6 days) |
-| Quebec 1989 | 2,000 km/s | ~21 h (0.9 days) |
-| Carrington 1859 | ~2,500+ km/s | ~17 h |
-
-> Animation loops for visual effect; label shows actual physics-based remaining time.
-
 ---
 
 ## 📚 Historical Event Library
@@ -117,11 +97,9 @@ Five documented storms for guaranteed offline demo:
 
 > *Carrington flare class estimated; Dst from ice-core proxies.
 
-Each JSON includes: `cmeSpeed`, `flareClass`, `kpIndex`, `stormIntensity`, `isBlackoutRisk`, `dst`, `cmeDirection`, `cmeHalfAngle`, `flarePeakTime`, `activeRegion`, plus `_meta` narrative.
-
 ---
 
-## 🚀 Quick Start
+## 🚀 Run It
 
 ```bash
 # Clone & install

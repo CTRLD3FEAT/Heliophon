@@ -12,29 +12,31 @@ interface AudioEngineProps {
   onAudioReady?: () => void;
 }
 
-// Disaster probability thresholds for distinct audio cues
-interface DisasterProbabilities {
-  gridBlackout: number;      // G3+ geomagnetic storm
-  gpsDisruption: number;     // Ionospheric scintillation
-  satelliteDrag: number;     // Enhanced atmospheric drag
-  radiationRisk: number;     // SEP / proton events
-  commsBlackout: number;     // HF radio blackout (flare)
-}
-
 /**
  * AudioEngine — space weather sonification.
  *
- * Audio graph:
- *   mainOsc (triangle) ──┐
- *                         ├─ mainGain (LFO-modulated) ─┐
- *   droneOsc (sine) ──────┘                            ├─ filter ── masterGain ── Destination
- *   alertSynth (square) ────────────────────────────────┘
+ * Continuous layers (always playing when active):
+ *   1. Kp Bass Drone      → Kp-index (0-9): fundamental + harmonic intervals (G0-G5 scale)
+ *   2. GOES Lead Synth    → GOES X-ray class (A-X): filter cutoff, oscillator type, brightness
+ *   3. Dst Sub-Bass       → Dst index (nT): amplitude of ultra-low rumble (felt more than heard)
+ *   4. CME Arpeggiator    → CME speed (km/s): note rate, harmonic progression
+ *   5. Solar Wind Texture → Proton flux/density: filtered noise density & color
  *
- * All parameter changes use rampTo for smooth, click-free transitions.
+ * Event-triggered layers (one-shot on threshold cross):
+ *   - Grid blackout (G3+): deep minor chord
+ *   - GPS disruption: high glitchy trills
+ *   - Satellite drag: descending glide
+ *   - Radiation risk: noise bursts
+ *   - Comms blackout: stuttering pattern
+ *
+ * Audio graph:
+ *   KpBass ──┐
+ *   GOESLead ┤
+ *   DstSub   ├─► MasterGain ──► Destination
+ *   CMEArp   ┤
+ *   SWNoise  ┘
  */
 
-/** Hook exposing audio state. Keep this hook separate from the component so the
- *  dashboard can read play/volume state without re-creating the audio graph. */
 export function useAudioEngine() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(0.7);
@@ -43,21 +45,29 @@ export function useAudioEngine() {
 }
 
 export function AudioEngine({ data, isPlaying, volume, isSimulation, onAudioReady }: AudioEngineProps) {
-  const mainOscRef = useRef<Tone.Oscillator | null>(null);
-  const droneOscRef = useRef<Tone.Oscillator | null>(null);
-  const lfoRef = useRef<Tone.LFO | null>(null);
-  const mainGainRef = useRef<Tone.Gain | null>(null);
-  const droneGainRef = useRef<Tone.Gain | null>(null);
-  const filterRef = useRef<Tone.Filter | null>(null);
+  // Continuous layer refs
+  const kpBassRef = useRef<Tone.FMSynth | null>(null);
+  const kpGainRef = useRef<Tone.Gain | null>(null);
+  const goesLeadRef = useRef<Tone.Synth | null>(null);
+  const goesDissonantRef = useRef<Tone.Synth | null>(null);
+  const goesGainRef = useRef<Tone.Gain | null>(null);
+  const goesFilterRef = useRef<Tone.Filter | null>(null);
+  const dstSubRef = useRef<Tone.Synth | null>(null);
+  const dstGainRef = useRef<Tone.Gain | null>(null);
+  const cmeArpRef = useRef<Tone.Loop | null>(null);
+  const cmeSynthRef = useRef<Tone.PolySynth | null>(null);
+  const cmeGainRef = useRef<Tone.Gain | null>(null);
+  const swNoiseRef = useRef<Tone.NoiseSynth | null>(null);
+  const swGainRef = useRef<Tone.Gain | null>(null);
+  const swFilterRef = useRef<Tone.Filter | null>(null);
   const masterGainRef = useRef<Tone.Gain | null>(null);
-  const alertSynthRef = useRef<Tone.Synth | null>(null);
 
-  // Disaster-specific audio nodes
-  const gridAlertSynthRef = useRef<Tone.PolySynth | null>(null);       // Deep, ominous
-  const gpsAlertSynthRef = useRef<Tone.Synth | null>(null);            // High, glitchy
-  const satelliteAlertSynthRef = useRef<Tone.Synth | null>(null);      // Descending tone
-  const radiationAlertSynthRef = useRef<Tone.NoiseSynth | null>(null); // Noise burst
-  const commsAlertSynthRef = useRef<Tone.Synth | null>(null);          // Stuttering
+  // Event-triggered alert refs
+  const gridAlertRef = useRef<Tone.PolySynth | null>(null);
+  const gpsAlertRef = useRef<Tone.Synth | null>(null);
+  const satelliteAlertRef = useRef<Tone.Synth | null>(null);
+  const radiationAlertRef = useRef<Tone.NoiseSynth | null>(null);
+  const commsAlertRef = useRef<Tone.Synth | null>(null);
 
   const lastAlertRef = useRef({
     grid: false,
@@ -68,6 +78,20 @@ export function AudioEngine({ data, isPlaying, volume, isSimulation, onAudioRead
   });
   const [error, setError] = useState<string | null>(null);
 
+  // Kp-index → Harmonic richness (no melodic note changes — stays a drone)
+  // Kp 0-3: pure sine (C2). Kp 4+: add odd harmonics for tension.
+  // Higher Kp = more harmonics = more warning-like timbre
+
+  // GOES class → oscillator type & filter
+  type OscillatorType = 'sine' | 'square' | 'sawtooth' | 'triangle' | 'pwm' | 'pulse' | 'fmsawtooth' | 'fmsquare' | 'fmtriangle' | 'fmsine' | 'am';
+  const GOES_CONFIG: Record<string, { type: OscillatorType; filterFreq: number; filterQ: number; gain: number }> = {
+    A: { type: 'sine', filterFreq: 400, filterQ: 1, gain: 0.05 },
+    B: { type: 'sine', filterFreq: 600, filterQ: 1.5, gain: 0.08 },
+    C: { type: 'triangle', filterFreq: 1000, filterQ: 2, gain: 0.12 },
+    M: { type: 'sawtooth', filterFreq: 2500, filterQ: 3, gain: 0.18 },
+    X: { type: 'square', filterFreq: 5000, filterQ: 4, gain: 0.25 },
+  };
+
   // Initialize audio on first Play click (user gesture required for Tone.start)
   useEffect(() => {
     if (!isPlaying) return;
@@ -77,80 +101,123 @@ export function AudioEngine({ data, isPlaying, volume, isSimulation, onAudioRead
       try {
         await Tone.start();
 
-        // Master gain → speakers
-        masterGainRef.current = new Tone.Gain(volume).toDestination();
+        // Master gain - increased to ensure audibility
+        masterGainRef.current = new Tone.Gain(Math.min(1.5, volume * 2.5)).toDestination();
 
-        // Lowpass filter for warm tone
-        filterRef.current = new Tone.Filter({
-          type: 'lowpass',
-          frequency: 2000,
-          Q: 2
-        }).connect(masterGainRef.current);
-
-        // Main storm tone: triangle osc, amplitude-modulated by LFO
-        mainOscRef.current = new Tone.Oscillator({
-          frequency: 200,
-          type: 'triangle'
-        });
-
-        lfoRef.current = new Tone.LFO({
-          frequency: 1,
-          min: 0.05,
-          max: 1
-        }).start();
-
-        mainGainRef.current = new Tone.Gain(0.3);
-        lfoRef.current.connect(mainGainRef.current.gain);
-        mainOscRef.current.connect(mainGainRef.current);
-        mainGainRef.current.connect(filterRef.current);
-        mainOscRef.current.start();
-
-        // Ambient drone: sine osc, low volume
-        droneOscRef.current = new Tone.Oscillator({
-          frequency: 100,
-          type: 'sine'
-        });
-        droneGainRef.current = new Tone.Gain(0.08);
-        droneOscRef.current.connect(droneGainRef.current);
-        droneGainRef.current.connect(filterRef.current);
-        droneOscRef.current.start();
-
-        // Alert motif synth (legacy - kept for backward compatibility)
-        alertSynthRef.current = new Tone.Synth({
-          oscillator: { type: 'square' },
-          envelope: { attack: 0.01, decay: 0.3, sustain: 0, release: 1 }
-        }).connect(masterGainRef.current);
-
-        // Disaster-specific alert synths
-        // Grid blackout: deep minor chord, slow decay
-        gridAlertSynthRef.current = new Tone.PolySynth(Tone.Synth, {
-          oscillator: { type: 'triangle' },
-          envelope: { attack: 0.1, decay: 1.5, sustain: 0.1, release: 2 }
-        }).connect(masterGainRef.current);
-
-        // GPS disruption: high-pitched glitchy FM tones
-        gpsAlertSynthRef.current = new Tone.Synth({
+        // ==================== LAYER 1: Kp Bass Drone ====================
+        // Continuous fundamental (C2) — NO melodic note changes.
+        // Higher Kp adds harmonics via FM for tension (warning timbre), not melody.
+        kpBassRef.current = new Tone.FMSynth({
+          harmonicity: 1,
+          modulationIndex: 1,
           oscillator: { type: 'sine' },
-          envelope: { attack: 0.005, decay: 0.1, sustain: 0, release: 0.2 }
-        }).connect(masterGainRef.current);
+          envelope: { attack: 2, decay: 0, sustain: 1, release: 2 },
+          modulation: { type: 'sine' },
+          modulationEnvelope: { attack: 0.5, decay: 0, sustain: 1, release: 2 },
+        });
+        kpGainRef.current = new Tone.Gain(0.25); // Increased from 0.15 for audibility
+        kpBassRef.current.connect(kpGainRef.current);
+        kpGainRef.current.connect(masterGainRef.current);
+        kpBassRef.current.triggerAttack('C2'); // Fixed root — never changes
 
-        // Satellite drag: descending frequency glide
-        satelliteAlertSynthRef.current = new Tone.Synth({
-          oscillator: { type: 'sawtooth' },
-          envelope: { attack: 0.05, decay: 1, sustain: 0.2, release: 1.5 }
-        }).connect(masterGainRef.current);
+        // ==================== LAYER 2: GOES Lead Synth ====================
+        // Brightness/timbre tracks GOES X-ray class. Dissonant dual-oscillator
+        // drone (no melodic line) — sounds like a warning siren, not a tune.
+        goesLeadRef.current = new Tone.Synth({
+          oscillator: { type: 'sine' },
+          envelope: { attack: 0.5, decay: 1, sustain: 0.3, release: 1 },
+        });
+        goesFilterRef.current = new Tone.Filter({ type: 'lowpass', frequency: 400, Q: 1 });
+        goesGainRef.current = new Tone.Gain(0.05);
+        goesLeadRef.current.chain(goesFilterRef.current, goesGainRef.current, masterGainRef.current);
+        goesLeadRef.current.triggerAttack('C4');
+        // Add a detuned 2nd oscillator for tension (no melody, just dissonance)
+        goesDissonantRef.current = new Tone.Synth({
+          oscillator: { type: 'sine' },
+          envelope: { attack: 0.5, decay: 1, sustain: 0.3, release: 1 },
+        });
+        goesDissonantRef.current.frequency.value = 392; // G3 — minor 7th below C4
+        goesDissonantRef.current.connect(goesFilterRef.current);
+        goesDissonantRef.current.triggerAttack('G3');
 
-        // Radiation risk: filtered noise bursts
-        radiationAlertSynthRef.current = new Tone.NoiseSynth({
+        // ==================== LAYER 3: Dst Sub-Bass ====================
+        // Ultra-low rumble (15-30Hz), amplitude tracks |Dst|
+        dstSubRef.current = new Tone.Synth({
+          oscillator: { type: 'sine' },
+          envelope: { attack: 5, decay: 0, sustain: 1, release: 5 },
+        });
+        dstGainRef.current = new Tone.Gain(0.2); // Increased from 0 to 0.2 for audibility
+        dstSubRef.current.connect(dstGainRef.current);
+        dstGainRef.current.connect(masterGainRef.current);
+        dstSubRef.current.triggerAttack('C0'); // ~16Hz
+
+        // ==================== LAYER 4: CME Arpeggiator ====================
+        // Arpeggio rate tracks CME speed. Classic two-tone warning siren
+        // (like European emergency vehicles) — alternating high/low pulses.
+        cmeSynthRef.current = new Tone.PolySynth(Tone.Synth, {
+          oscillator: { type: 'square' }, // Square = harsh, alarm-like
+          envelope: { attack: 0.001, decay: 0.1, sustain: 0, release: 0.1 },
+        });
+        cmeGainRef.current = new Tone.Gain(0.15);
+        cmeSynthRef.current.connect(cmeGainRef.current);
+        cmeGainRef.current.connect(masterGainRef.current);
+
+        // Two-tone siren: alternating high (C6) and low (C5) — classic warning pattern
+        const sirenHigh = 'C6';
+        const sirenLow = 'C5';
+        let sirenState = 0;
+        cmeArpRef.current = new Tone.Loop((time) => {
+          const note = sirenState === 0 ? sirenHigh : sirenLow;
+          cmeSynthRef.current?.triggerAttackRelease(note, '16n', time);
+          sirenState = 1 - sirenState; // Alternate
+        }, '4n').start(0);
+
+        // ==================== LAYER 5: Solar Wind Noise ====================
+        // Filtered noise, density tracks proton flux
+        swNoiseRef.current = new Tone.NoiseSynth({
           noise: { type: 'brown' },
-          envelope: { attack: 0.01, decay: 0.3, sustain: 0, release: 0.5 }
+          envelope: { attack: 0.1, decay: 0.5, sustain: 0.3, release: 1 },
+        });
+        swFilterRef.current = new Tone.Filter({ type: 'bandpass', frequency: 500, Q: 5 });
+        swGainRef.current = new Tone.Gain(0.08); // Increased from 0.03
+        swNoiseRef.current.chain(swFilterRef.current, swGainRef.current, masterGainRef.current);
+
+        // Start continuous noise loop
+        const swLoop = new Tone.Loop((time) => {
+          swNoiseRef.current?.triggerAttackRelease('8n', time);
+        }, '2n').start(0);
+
+        // ==================== EVENT ALERT SYNTHS ====================
+        // Grid blackout: deep minor chord
+        gridAlertRef.current = new Tone.PolySynth(Tone.Synth, {
+          oscillator: { type: 'triangle' },
+          envelope: { attack: 0.1, decay: 1.5, sustain: 0.1, release: 2 },
         }).connect(masterGainRef.current);
 
-        // Comms blackout: stuttering square wave
-        commsAlertSynthRef.current = new Tone.Synth({
-          oscillator: { type: 'square' },
-          envelope: { attack: 0.001, decay: 0.05, sustain: 0, release: 0.1 }
+        // GPS disruption: high glitchy FM
+        gpsAlertRef.current = new Tone.Synth({
+          oscillator: { type: 'sine' },
+          envelope: { attack: 0.005, decay: 0.1, sustain: 0, release: 0.2 },
         }).connect(masterGainRef.current);
+
+        // Satellite drag: descending glide
+        satelliteAlertRef.current = new Tone.Synth({
+          oscillator: { type: 'sawtooth' },
+          envelope: { attack: 0.05, decay: 1, sustain: 0.2, release: 1.5 },
+        }).connect(masterGainRef.current);
+
+        // Radiation risk: noise bursts
+        radiationAlertRef.current = new Tone.NoiseSynth({
+          noise: { type: 'brown' },
+          envelope: { attack: 0.01, decay: 0.3, sustain: 0, release: 0.5 },
+        }).connect(masterGainRef.current);
+
+        // Comms blackout: stuttering square
+        commsAlertRef.current = new Tone.Synth({
+          oscillator: { type: 'square' },
+          envelope: { attack: 0.001, decay: 0.05, sustain: 0, release: 0.1 },
+        }).connect(masterGainRef.current);
+
       } catch (e) {
         console.error('Audio init failed:', e);
         if (mounted) {
@@ -158,11 +225,15 @@ export function AudioEngine({ data, isPlaying, volume, isSimulation, onAudioRead
           return;
         }
       }
+      // Start the Transport so Tone.Loop callbacks (CME Arp, Solar Wind) fire.
+      // Without this, loops are created but never execute — two of five layers are silent.
+      Tone.Transport.start();
+
       if (mounted) onAudioReady?.();
     };
     init();
 
-    // Resume AudioContext when tab becomes visible (browsers suspend it in background)
+    // Resume AudioContext when tab becomes visible
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && Tone.context.state === 'suspended') {
         Tone.start();
@@ -174,114 +245,109 @@ export function AudioEngine({ data, isPlaying, volume, isSimulation, onAudioRead
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       mounted = false;
       // Dispose all nodes
-      [mainOscRef, droneOscRef, lfoRef, mainGainRef, droneGainRef,
-       filterRef, masterGainRef, alertSynthRef,
-       gridAlertSynthRef, gpsAlertSynthRef, satelliteAlertSynthRef,
-       radiationAlertSynthRef, commsAlertSynthRef].forEach(r => {
-        try { r.current?.dispose(); } catch (_) {}
-      });
+      [kpBassRef, kpGainRef, goesLeadRef, goesDissonantRef, goesGainRef, goesFilterRef,
+       dstSubRef, dstGainRef, cmeArpRef, cmeSynthRef, cmeGainRef,
+       swNoiseRef, swGainRef, swFilterRef, masterGainRef,
+       gridAlertRef, gpsAlertRef, satelliteAlertRef, radiationAlertRef, commsAlertRef]
+        .forEach(r => { try { r.current?.dispose(); } catch (_) {} });
     };
   }, [isPlaying]);
 
-  // Compute disaster probabilities from data
-  const computeDisasterProbabilities = (data: SpaceWeatherEvent): DisasterProbabilities => {
-    const { kpIndex, flareClass, stormIntensity, cmeSpeed } = data;
-
-    // Grid blackout: G3+ (Kp >= 7) geomagnetic storm
-    const gridBlackout = kpIndex >= 7 ? Math.min(1, (kpIndex - 6) / 3) : 0;
-
-    // GPS disruption: ionospheric scintillation at G2+ (Kp >= 6) or strong flares
-    const flarePrefix = flareClass[0];
-    const gpsDisruption = kpIndex >= 6
-      ? Math.min(1, (kpIndex - 5) / 4)
-      : (flarePrefix === 'X' || flarePrefix === 'M') ? 0.4 : 0;
-
-    // Satellite drag: enhanced atmospheric drag at G2+ (Kp >= 6)
-    const satelliteDrag = kpIndex >= 6 ? Math.min(1, (kpIndex - 5) / 4) : 0;
-
-    // Radiation risk: SEP/proton events from X-class flares or fast CMEs
-    const radiationRisk = (flarePrefix === 'X' ? 0.6 : flarePrefix === 'M' ? 0.2 : 0) +
-                         (cmeSpeed > 1500 ? 0.3 : cmeSpeed > 1000 ? 0.15 : 0);
-
-    // Comms blackout: HF radio blackout from M/X-class flares on sunlit side
-    const commsBlackout = flarePrefix === 'X' ? 0.8 : flarePrefix === 'M' ? 0.5 : 0;
-
-    return { gridBlackout, gpsDisruption, satelliteDrag, radiationRisk, commsBlackout };
-  };
-
-  // Update sonic parameters when telemetry or volume changes
+  // Update continuous layers when telemetry changes
   useEffect(() => {
     if (!isPlaying) return;
 
-    const { stormIntensity, cmeSpeed, kpIndex, isBlackoutRisk } = data;
+    const { kpIndex, flareClass, dst, cmeSpeed, protonFlux } = data;
+
+    // ---- LAYER 1: Kp Bass ----
+    // Kp 0-3: pure sine (modulationIndex = 0). Kp 4+: FM adds odd harmonics for tension.
+    // Higher Kp = more harmonics = more warning-like timbre. No melodic note changes.
+    const modIndex = Math.min(10, Math.max(0, (kpIndex - 3) * 1.5)); // 0 at Kp<=3, up to 10 at Kp=9
+    const kpBass = kpBassRef.current;
+    if (kpBass) {
+      (kpBass as any).modulationIndex?.rampTo(modIndex, 1);
+    }
+    // Gain increases with Kp for prominence
+    if (kpGainRef.current) kpGainRef.current.gain.rampTo(0.1 + kpIndex * 0.015, 1);
+
+    // ---- LAYER 2: GOES Lead ----
+    const flarePrefix = flareClass?.[0] || 'A';
+    const goesCfg = GOES_CONFIG[flarePrefix] || GOES_CONFIG.A;
+    if (goesLeadRef.current) {
+      (goesLeadRef.current as any).set({ oscillator: { type: goesCfg.type } });
+      goesLeadRef.current.volume.rampTo(goesCfg.gain, 0.5);
+    }
+    if (goesFilterRef.current) {
+      goesFilterRef.current.frequency.rampTo(goesCfg.filterFreq, 0.5);
+      goesFilterRef.current.Q.rampTo(goesCfg.filterQ, 0.5);
+    }
+
+    // ---- LAYER 3: Dst Sub-Bass ----
+    // Dst in nT (negative = storm). Map -20→0, -500→1 amplitude
+    const dstAbs = Math.abs(dst || 0);
+    const dstAmp = Math.min(1, Math.max(0, (dstAbs - 20) / 480));
+    if (dstSubRef.current) dstSubRef.current.frequency.rampTo(15 + dstAmp * 15, 2); // 15-30Hz
+    if (dstGainRef.current) dstGainRef.current.gain.rampTo(dstAmp * 0.2, 2);
+
+    // ---- LAYER 4: CME Arpeggiator ----
+    // Rate: 300km/s=0.2Hz (10s/note) → 2000km/s=4Hz (0.25s/note)
+    const cmeRate = 0.2 + (Math.min(2000, cmeSpeed) / 2000) * 3.8;
+    const cmeInterval = 1 / cmeRate; // seconds per note
+    if (cmeArpRef.current) {
+      cmeArpRef.current.interval = `${cmeInterval}s`;
+    }
+    // Harmonic complexity increases with speed
+    if (cmeGainRef.current) cmeGainRef.current.gain.rampTo(0.05 + (cmeSpeed / 2000) * 0.05, 1);
+
+    // ---- LAYER 5: Solar Wind Noise ----
+    // Proton flux (pfu): 1→quiet, 1000→dense
+    const flux = protonFlux || 1;
+    const fluxNorm = Math.min(1, Math.log10(flux) / 3); // log scale
+    if (swFilterRef.current) swFilterRef.current.frequency.rampTo(200 + fluxNorm * 2000, 1);
+    if (swGainRef.current) swGainRef.current.gain.rampTo(0.01 + fluxNorm * 0.04, 1);
+
+    // Master volume (boosted for audibility, matching the init value)
+    if (masterGainRef.current) masterGainRef.current.gain.rampTo(Math.min(1.5, volume * 2.5), 0.2);
+
+  }, [data, isPlaying, volume]);
+
+  // Event-triggered alerts (one-shot on threshold cross)
+  useEffect(() => {
+    if (!isPlaying) return;
+
+    const { kpIndex, flareClass, dst, cmeSpeed } = data;
     const disasterProbs = computeDisasterProbabilities(data);
-
-    // --- Perceptual sonification. Each dimension maps to a distinct sonic axis ---
-    // Pitch (exponential)  : storm energy — 100 Hz quiet → 800 Hz extreme
-    // Tempo / pulse rate   : CME speed — slow (0.1 Hz) → rapid (10 Hz)
-    // Filter openness      : NOAA G-scale — muffled → bright, with dissonance
-    const baseFreq = 100 * Math.pow(8, stormIntensity);          // 100–800 Hz, exponential
-    const pulseRate = 0.1 + (cmeSpeed / 2000) * 9.9;             // 0.1–10 Hz
-    const filterFreq = 200 + (kpIndex / 9) * 3800;               // 200–4000 Hz
-    const lfoDepth = 0.1 + (kpIndex / 9) * 0.9;                  // pulsing strength
-
-    if (mainOscRef.current) mainOscRef.current.frequency.rampTo(baseFreq, 0.5);
-    if (droneOscRef.current) droneOscRef.current.frequency.rampTo(baseFreq * 0.5, 0.5);
-    if (lfoRef.current) {
-      lfoRef.current.frequency.rampTo(pulseRate, 0.3);
-      lfoRef.current.max = lfoDepth;
-    }
-    if (filterRef.current) filterRef.current.frequency.rampTo(filterFreq, 0.5);
-
-    // Master volume
-    if (masterGainRef.current) masterGainRef.current.gain.rampTo(volume, 0.2);
-
-    // Legacy alert motif on G3+ transition
-    if (isBlackoutRisk && !lastAlertRef.current.grid && alertSynthRef.current) {
-      const notes = ['C5', 'E5', 'G5', 'C6'];
-      const t = Tone.now();
-      notes.forEach((note, i) => {
-        alertSynthRef.current?.triggerAttackRelease(note, '16n', t + i * 0.15);
-      });
-    }
-    lastAlertRef.current.grid = isBlackoutRisk;
-
-    // --- Disaster-specific audio cues ---
     const t = Tone.now();
 
-    // Grid blackout: deep minor chord (C3-Eb3-G3-C4) - ominous, slow
-    if (disasterProbs.gridBlackout > 0.5 && !lastAlertRef.current.grid && gridAlertSynthRef.current) {
-      const notes = ['C3', 'Eb3', 'G3', 'C4'];
-      notes.forEach((note, i) => {
-        gridAlertSynthRef.current?.triggerAttackRelease(note, '2n', t + i * 0.3);
-      });
+    // Grid blackout: G3+ (Kp >= 7)
+    if (disasterProbs.gridBlackout > 0.5 && !lastAlertRef.current.grid && gridAlertRef.current) {
+      const notes = ['C2', 'Eb2', 'G2', 'C3', 'Eb3', 'G3'];
+      notes.forEach((note, i) => gridAlertRef.current?.triggerAttackRelease(note, '2n', t + i * 0.25));
     }
 
-    // GPS disruption: high-pitched glitchy FM trills (C7-D7-E7-F7-G7)
-    if (disasterProbs.gpsDisruption > 0.4 && !lastAlertRef.current.gps && gpsAlertSynthRef.current) {
-      const notes = ['C7', 'D7', 'E7', 'F7', 'G7'];
-      notes.forEach((note, i) => {
-        gpsAlertSynthRef.current?.triggerAttackRelease(note, '64n', t + i * 0.05);
-      });
+    // GPS disruption: G2+ (Kp >= 6) or M/X flare
+    if (disasterProbs.gpsDisruption > 0.4 && !lastAlertRef.current.gps && gpsAlertRef.current) {
+      const notes = ['C7', 'D7', 'E7', 'F7', 'G7', 'A7', 'B7', 'C8'];
+      notes.forEach((note, i) => gpsAlertRef.current?.triggerAttackRelease(note, '64n', t + i * 0.04));
     }
 
-    // Satellite drag: descending sawtooth glide (G5 down to C4)
-    if (disasterProbs.satelliteDrag > 0.4 && !lastAlertRef.current.satellite && satelliteAlertSynthRef.current) {
-      satelliteAlertSynthRef.current?.triggerAttackRelease('G5', '2n', t);
-      satelliteAlertSynthRef.current?.oscillator?.frequency?.rampTo(261.63, 1.5, t + 0.1); // C4
+    // Satellite drag: G2+ (Kp >= 6)
+    if (disasterProbs.satelliteDrag > 0.4 && !lastAlertRef.current.satellite && satelliteAlertRef.current) {
+      satelliteAlertRef.current?.triggerAttackRelease('G5', '2n', t);
+      satelliteAlertRef.current?.oscillator?.frequency?.rampTo(261.63, 1.5, t + 0.1); // C4
     }
 
-    // Radiation risk: brown noise bursts
-    if (disasterProbs.radiationRisk > 0.3 && !lastAlertRef.current.radiation && radiationAlertSynthRef.current) {
-      radiationAlertSynthRef.current?.triggerAttackRelease('8n', t);
-      radiationAlertSynthRef.current?.triggerAttackRelease('8n', t + 0.3);
-      radiationAlertSynthRef.current?.triggerAttackRelease('8n', t + 0.6);
+    // Radiation risk: X-flare or fast CME
+    if (disasterProbs.radiationRisk > 0.3 && !lastAlertRef.current.radiation && radiationAlertRef.current) {
+      radiationAlertRef.current?.triggerAttackRelease('4n', t);
+      radiationAlertRef.current?.triggerAttackRelease('4n', t + 0.5);
+      radiationAlertRef.current?.triggerAttackRelease('4n', t + 1.0);
     }
 
-    // Comms blackout: stuttering square wave pattern
-    if (disasterProbs.commsBlackout > 0.4 && !lastAlertRef.current.comms && commsAlertSynthRef.current) {
-      for (let i = 0; i < 8; i++) {
-        commsAlertSynthRef.current?.triggerAttackRelease('A5', '32n', t + i * 0.12);
+    // Comms blackout: M/X flare
+    if (disasterProbs.commsBlackout > 0.4 && !lastAlertRef.current.comms && commsAlertRef.current) {
+      for (let i = 0; i < 12; i++) {
+        commsAlertRef.current?.triggerAttackRelease('A5', '32n', t + i * 0.08);
       }
     }
 
@@ -293,10 +359,33 @@ export function AudioEngine({ data, isPlaying, volume, isSimulation, onAudioRead
       radiation: disasterProbs.radiationRisk > 0.3,
       comms: disasterProbs.commsBlackout > 0.4,
     };
-  }, [data, isPlaying, volume]);
+  }, [data, isPlaying]);
 
-  // Audio engine is headless — no visible UI. Storm intensity and blackout
-  // alerts are surfaced visually by the player's live audio visualizer,
-  // so this component renders nothing to the DOM.
   return null;
+}
+
+// Compute disaster probabilities from data
+function computeDisasterProbabilities(data: SpaceWeatherEvent) {
+  const { kpIndex, flareClass, stormIntensity, cmeSpeed } = data;
+  const flarePrefix = flareClass?.[0] || 'A';
+
+  // Grid blackout: G3+ (Kp >= 7)
+  const gridBlackout = kpIndex >= 7 ? Math.min(1, (kpIndex - 6) / 3) : 0;
+
+  // GPS disruption: G2+ (Kp >= 6) or strong flares
+  const gpsDisruption = kpIndex >= 6
+    ? Math.min(1, (kpIndex - 5) / 4)
+    : (flarePrefix === 'X' || flarePrefix === 'M') ? 0.4 : 0;
+
+  // Satellite drag: G2+ (Kp >= 6)
+  const satelliteDrag = kpIndex >= 6 ? Math.min(1, (kpIndex - 5) / 4) : 0;
+
+  // Radiation risk: SEP/proton from X-flares or fast CMEs
+  const radiationRisk = (flarePrefix === 'X' ? 0.6 : flarePrefix === 'M' ? 0.2 : 0) +
+                       (cmeSpeed > 1500 ? 0.3 : cmeSpeed > 1000 ? 0.15 : 0);
+
+  // Comms blackout: HF radio blackout from M/X flares
+  const commsBlackout = flarePrefix === 'X' ? 0.8 : flarePrefix === 'M' ? 0.5 : 0;
+
+  return { gridBlackout, gpsDisruption, satelliteDrag, radiationRisk, commsBlackout };
 }
