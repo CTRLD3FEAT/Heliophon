@@ -27,25 +27,42 @@ Five documented storms are available in the sidebar for offline replay:
 
 The sound is a **perceptual sonification** — a documented design choice, not a physical measurement. We do not issue alerts; we communicate NOAA SWPC data.
 
-| Sound | What It Means |
-|-------|---------------|
-| Low hum | Calm conditions (Kp ≤ 3, no Earth-directed CME) |
-| Rising pitch & pulsing | Growing storm energy — higher Kp, faster CME, stronger flare |
-| Red alert motif | NOAA G3+ geomagnetic storm watch in effect |
+### Continuous Layers (5-layer sonification)
+
+| Layer | What It Maps To | Sound Character |
+|-------|----------------|-----------------|
+| **Kp Bass Drone** | Kp-index 0–9 | Fundamental + harmonic (G0–G5 scale), low hum |
+| **GOES Lead Synth** | X-ray flare class (A–X) | Filter brightness, oscillator type, mid-range tone |
+| **Dst Sub-Bass** | Dst index (nT) | Ultra-low rumble (15–30 Hz), felt more than heard |
+| **CME Arpeggiator** | CME speed (km/s) | Arpeggio rate, harmonic complexity |
+| **Solar Wind Texture** | Proton flux (pfu) | Filtered noise density & color |
+
+### Event-Triggered Alerts (threshold-cross)
+
+| Alert | Trigger | Sound |
+|-------|---------|-------|
+| **Grid Blackout** | G3+ (Kp ≥ 7) | Deep minor chord |
+| **GPS Disruption** | G2+ (Kp ≥ 6) or M/X flare | High glitchy trills |
+| **Satellite Drag** | G2+ (Kp ≥ 6) | Descending glide |
+| **Radiation Risk** | X-flare or fast CME | Noise bursts |
+| **Comms Blackout** | M/X flare | Stuttering square |
 
 **Audio graph** (Tone.js):
 
 ```
-mainOsc (triangle) ──┐
-                       ├─ mainGain (LFO-modulated) ─┐
-droneOsc (sine) ──────┘                            ├─ filter ── masterGain ── Destination
-alertSynth (square) ────────────────────────────────┘
+KpBass ──┐
+GOESLead ┤
+DstSub   ├─► MasterGain ──► Destination
+CMEArp   ┤
+SWNoise  ┘
 ```
 
-- **Pitch** maps to storm energy (exponential, 100–800 Hz).
-- **Pulse rate** maps to CME speed (0.1–10 Hz).
-- **Dissonance / filter openness** maps to NOAA G-scale level.
-- A 4-note alert motif (`C5–E5–G5–C6`) fires when a G3+ watch begins.
+- **Kp Bass** maps to storm energy (G0–G5 scale).
+- **GOES Lead** brightness maps to X-ray flare class.
+- **Dst Sub-Bass** amplitude maps to |Dst| storm depth.
+- **CME Arp** rate maps to CME speed.
+- **Solar Wind** density maps to proton flux.
+- Alerts fire once per threshold cross (debounced).
 
 ## 🚀 Run It
 

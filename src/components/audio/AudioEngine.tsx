@@ -209,6 +209,10 @@ export function AudioEngine({ data, isPlaying, volume, isSimulation, onAudioRead
           return;
         }
       }
+      // Start the Transport so Tone.Loop callbacks (CME Arp, Solar Wind) fire.
+      // Without this, loops are created but never execute — two of five layers are silent.
+      Tone.Transport.start();
+
       if (mounted) onAudioReady?.();
     };
     init();
@@ -292,8 +296,8 @@ export function AudioEngine({ data, isPlaying, volume, isSimulation, onAudioRead
     if (swFilterRef.current) swFilterRef.current.frequency.rampTo(200 + fluxNorm * 2000, 1);
     if (swGainRef.current) swGainRef.current.gain.rampTo(0.01 + fluxNorm * 0.04, 1);
 
-    // Master volume
-    if (masterGainRef.current) masterGainRef.current.gain.rampTo(volume, 0.2);
+    // Master volume (boosted for audibility, matching the init value)
+    if (masterGainRef.current) masterGainRef.current.gain.rampTo(Math.min(1.5, volume * 2.5), 0.2);
 
   }, [data, isPlaying, volume]);
 
