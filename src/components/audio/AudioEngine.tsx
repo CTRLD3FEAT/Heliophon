@@ -101,8 +101,8 @@ export function AudioEngine({ data, isPlaying, volume, isSimulation, onAudioRead
       try {
         await Tone.start();
 
-        // Master gain
-        masterGainRef.current = new Tone.Gain(volume).toDestination();
+        // Master gain - increased to ensure audibility
+        masterGainRef.current = new Tone.Gain(Math.min(1.5, volume * 2.5)).toDestination();
 
         // ==================== LAYER 1: Kp Bass Drone ====================
         // Continuous fundamental + harmonic based on Kp-index
@@ -110,7 +110,7 @@ export function AudioEngine({ data, isPlaying, volume, isSimulation, onAudioRead
           oscillator: { type: 'sine' },
           envelope: { attack: 2, decay: 0, sustain: 1, release: 2 },
         });
-        kpGainRef.current = new Tone.Gain(0.15);
+        kpGainRef.current = new Tone.Gain(0.25); // Increased from 0.15 for audibility
         kpBassRef.current.connect(kpGainRef.current);
         kpGainRef.current.connect(masterGainRef.current);
         kpBassRef.current.triggerAttack('C2'); // Start with root note
@@ -132,7 +132,7 @@ export function AudioEngine({ data, isPlaying, volume, isSimulation, onAudioRead
           oscillator: { type: 'sine' },
           envelope: { attack: 5, decay: 0, sustain: 1, release: 5 },
         });
-        dstGainRef.current = new Tone.Gain(0);
+        dstGainRef.current = new Tone.Gain(0.2); // Increased from 0 to 0.2 for audibility
         dstSubRef.current.connect(dstGainRef.current);
         dstGainRef.current.connect(masterGainRef.current);
         dstSubRef.current.triggerAttack('C0'); // ~16Hz
@@ -143,7 +143,7 @@ export function AudioEngine({ data, isPlaying, volume, isSimulation, onAudioRead
           oscillator: { type: 'triangle' },
           envelope: { attack: 0.05, decay: 0.3, sustain: 0, release: 0.5 },
         });
-        cmeGainRef.current = new Tone.Gain(0.08);
+        cmeGainRef.current = new Tone.Gain(0.15); // Increased from 0.08
         cmeSynthRef.current.connect(cmeGainRef.current);
         cmeGainRef.current.connect(masterGainRef.current);
 
@@ -163,7 +163,7 @@ export function AudioEngine({ data, isPlaying, volume, isSimulation, onAudioRead
           envelope: { attack: 0.1, decay: 0.5, sustain: 0.3, release: 1 },
         });
         swFilterRef.current = new Tone.Filter({ type: 'bandpass', frequency: 500, Q: 5 });
-        swGainRef.current = new Tone.Gain(0.03);
+        swGainRef.current = new Tone.Gain(0.08); // Increased from 0.03
         swNoiseRef.current.chain(swFilterRef.current, swGainRef.current, masterGainRef.current);
 
         // Start continuous noise loop
