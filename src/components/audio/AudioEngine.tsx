@@ -46,7 +46,7 @@ export function useAudioEngine() {
 
 export function AudioEngine({ data, isPlaying, volume, isSimulation, onAudioReady }: AudioEngineProps) {
   // Continuous layer refs
-  const kpBassRef = useRef<Tone.Synth | null>(null);
+  const kpBassRef = useRef<Tone.FMSynth | null>(null);
   const kpGainRef = useRef<Tone.Gain | null>(null);
   const goesLeadRef = useRef<Tone.Synth | null>(null);
   const goesDissonantRef = useRef<Tone.Synth | null>(null);
@@ -78,10 +78,9 @@ export function AudioEngine({ data, isPlaying, volume, isSimulation, onAudioRead
   });
   const [error, setError] = useState<string | null>(null);
 
-  // Kp-index → Musical scale mapping (G0-G5)
-  // G0=Kp0-3: Root (C2), G1=Kp4: +2nd (D2), G2=Kp5: +3rd (E2),
-  // G3=Kp6: +4th (F2), G4=Kp7: +5th (G2), G5=Kp8-9: +6th (A2)
-  const KP_SCALE = ['C2', 'D2', 'E2', 'F2', 'G2', 'A2'];
+  // Kp-index → Harmonic richness (no melodic note changes — stays a drone)
+  // Kp 0-3: pure sine (C2). Kp 4+: add odd harmonics for tension.
+  // Higher Kp = more harmonics = more warning-like timbre
 
   // GOES class → oscillator type & filter
   type OscillatorType = 'sine' | 'square' | 'sawtooth' | 'triangle' | 'pwm' | 'pulse' | 'fmsawtooth' | 'fmsquare' | 'fmtriangle' | 'fmsine' | 'am';
@@ -106,15 +105,20 @@ export function AudioEngine({ data, isPlaying, volume, isSimulation, onAudioRead
         masterGainRef.current = new Tone.Gain(Math.min(1.5, volume * 2.5)).toDestination();
 
         // ==================== LAYER 1: Kp Bass Drone ====================
-        // Continuous fundamental + harmonic based on Kp-index
-        kpBassRef.current = new Tone.Synth({
+        // Continuous fundamental (C2) — NO melodic note changes.
+        // Higher Kp adds harmonics via FM for tension (warning timbre), not melody.
+        kpBassRef.current = new Tone.FMSynth({
+          harmonicity: 1,
+          modulationIndex: 1,
           oscillator: { type: 'sine' },
           envelope: { attack: 2, decay: 0, sustain: 1, release: 2 },
+          modulation: { type: 'sine' },
+          modulationEnvelope: { attack: 0.5, decay: 0, sustain: 1, release: 2 },
         });
         kpGainRef.current = new Tone.Gain(0.25); // Increased from 0.15 for audibility
         kpBassRef.current.connect(kpGainRef.current);
         kpGainRef.current.connect(masterGainRef.current);
-        kpBassRef.current.triggerAttack('C2'); // Start with root note
+        kpBassRef.current.triggerAttack('C2'); // Fixed root — never changes
 
         // ==================== LAYER 2: GOES Lead Synth ====================
         // Brightness/timbre tracks GOES X-ray class. Dissonant dual-oscillator
@@ -255,20 +259,14 @@ export function AudioEngine({ data, isPlaying, volume, isSimulation, onAudioRead
     const { kpIndex, flareClass, dst, cmeSpeed, protonFlux } = data;
 
     // ---- LAYER 1: Kp Bass ----
-    // Map Kp 0-9 to scale degrees (0-3=G0, 4=G1, 5=G2, 6=G3, 7=G4, 8-9=G5)
-    let kpScaleIndex = 0;
-    if (kpIndex >= 8) kpScaleIndex = 5;      // G5
-    else if (kpIndex >= 7) kpScaleIndex = 4; // G4
-    else if (kpIndex >= 6) kpScaleIndex = 3; // G3
-    else if (kpIndex >= 5) kpScaleIndex = 2; // G2
-    else if (kpIndex >= 4) kpScaleIndex = 1; // G1
-    // Update note based on current Kp scale index
-    if (kpBassRef.current) {
-      kpBassRef.current.setNote(KP_SCALE[kpScaleIndex]);
+    // Kp 0-3: pure sine (modulationIndex = 0). Kp 4+: FM adds odd harmonics for tension.
+    // Higher Kp = more harmonics = more warning-like timbre. No melodic note changes.
+    const modIndex = Math.min(10, Math.max(0, (kpIndex - 3) * 1.5)); // 0 at Kp<=3, up to 10 at Kp=9
+    const kpBass = kpBassRef.current;
+    if (kpBass) {
+      (kpBass as any).modulationIndex?.rampTo(modIndex, 1);
     }
-    // else 0 = G0 (root)
-
-    // Update harmonic richness at higher Kp levels
+    // Gain increases with Kp for prominence
     if (kpGainRef.current) kpGainRef.current.gain.rampTo(0.1 + kpIndex * 0.015, 1);
 
     // ---- LAYER 2: GOES Lead ----
