@@ -189,4 +189,4 @@ MIT — free for any use. Attribution appreciated.
 
 ---
 
-*Built for NASA Space Apps Challenge 2026 by Team CTRLD3FEAT.*
+*Independent project developed by TEAM NRZB for NASA Space Apps Challenge 2026.*
