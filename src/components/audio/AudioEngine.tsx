@@ -49,6 +49,7 @@ export function AudioEngine({ data, isPlaying, volume, isSimulation, onAudioRead
   const kpBassRef = useRef<Tone.Synth | null>(null);
   const kpGainRef = useRef<Tone.Gain | null>(null);
   const goesLeadRef = useRef<Tone.Synth | null>(null);
+  const goesDissonantRef = useRef<Tone.Synth | null>(null);
   const goesGainRef = useRef<Tone.Gain | null>(null);
   const goesFilterRef = useRef<Tone.Filter | null>(null);
   const dstSubRef = useRef<Tone.Synth | null>(null);
@@ -116,7 +117,8 @@ export function AudioEngine({ data, isPlaying, volume, isSimulation, onAudioRead
         kpBassRef.current.triggerAttack('C2'); // Start with root note
 
         // ==================== LAYER 2: GOES Lead Synth ====================
-        // Brightness/timbre tracks GOES X-ray class
+        // Brightness/timbre tracks GOES X-ray class. Dissonant dual-oscillator
+        // drone (no melodic line) — sounds like a warning siren, not a tune.
         goesLeadRef.current = new Tone.Synth({
           oscillator: { type: 'sine' },
           envelope: { attack: 0.5, decay: 1, sustain: 0.3, release: 1 },
@@ -125,6 +127,14 @@ export function AudioEngine({ data, isPlaying, volume, isSimulation, onAudioRead
         goesGainRef.current = new Tone.Gain(0.05);
         goesLeadRef.current.chain(goesFilterRef.current, goesGainRef.current, masterGainRef.current);
         goesLeadRef.current.triggerAttack('C4');
+        // Add a detuned 2nd oscillator for tension (no melody, just dissonance)
+        goesDissonantRef.current = new Tone.Synth({
+          oscillator: { type: 'sine' },
+          envelope: { attack: 0.5, decay: 1, sustain: 0.3, release: 1 },
+        });
+        goesDissonantRef.current.frequency.value = 392; // G3 — minor 7th below C4
+        goesDissonantRef.current.connect(goesFilterRef.current);
+        goesDissonantRef.current.triggerAttack('G3');
 
         // ==================== LAYER 3: Dst Sub-Bass ====================
         // Ultra-low rumble (15-30Hz), amplitude tracks |Dst|
@@ -230,7 +240,7 @@ export function AudioEngine({ data, isPlaying, volume, isSimulation, onAudioRead
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       mounted = false;
       // Dispose all nodes
-      [kpBassRef, kpGainRef, goesLeadRef, goesGainRef, goesFilterRef,
+      [kpBassRef, kpGainRef, goesLeadRef, goesDissonantRef, goesGainRef, goesFilterRef,
        dstSubRef, dstGainRef, cmeArpRef, cmeSynthRef, cmeGainRef,
        swNoiseRef, swGainRef, swFilterRef, masterGainRef,
        gridAlertRef, gpsAlertRef, satelliteAlertRef, radiationAlertRef, commsAlertRef]
