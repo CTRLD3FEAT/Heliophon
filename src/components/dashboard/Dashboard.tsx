@@ -83,7 +83,7 @@ export function Dashboard({
           <div className="flex flex-col gap-3 mb-3">
             <div>
               <h1 className="text-xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-purple-500 to-pink-400">
-                SOLAR JUKEBOX
+                HELIOPHON
               </h1>
               <p className="text-slate-400 mt-0.5 text-xs">
                 Space Weather Sonification

@@ -315,14 +315,19 @@ export function CosmicAnimation({
           drawLabels(ctx, cx, cy, isSimulation, timestamp);
         }
       } else {
-        // Earth close-up view
-        earth.x = cx;
-        earth.y = cy;
+        // Earth close-up view — big realistic Earth
+        earth.x = w * 0.55;
+        earth.y = h * 0.55;
         earth.angle += earth.speed * dt;
 
-        drawSunWireframe(ctx, cx - w * 0.4, cy, timestamp, stormIntensity, isBlackoutRisk);
+        const savedEarthRadius = earth.radius;
+        earth.radius = Math.min(w, h) * 0.3; // Large Earth for close-up
+
+        drawSunWireframe(ctx, w * 0.1, cy, timestamp, stormIntensity, isBlackoutRisk);
         drawSolarWind(ctx, dt, cx, cy, earth, magnetosphereCompression);
-        drawEarthMagnetosphere(ctx, earth, timestamp, magnetosphereCompression, auroraIntensity, magnetosphereHit);
+        drawEarthMagnetosphere(ctx, earth, timestamp, magnetosphereCompression, auroraIntensity, magnetosphereHit, true);
+
+        earth.radius = savedEarthRadius;
 
         if (showLabels) {
           ctx.font = 'bold 14px "Inter", sans-serif';
@@ -678,7 +683,8 @@ function drawEarthMagnetosphere(
   timestamp: number,
   magnetosphereCompression: number,
   auroraIntensity: number,
-  magnetosphereHit: boolean
+  magnetosphereHit: boolean,
+  realisticEarth: boolean = false
 ) {
   const { x, y, radius } = earth;
   const magRadius = radius * magnetosphereCompression;
@@ -787,6 +793,9 @@ function drawEarthMagnetosphere(
   }
 
   // Earth
+  if (realisticEarth) {
+    drawRealisticEarth(ctx, x, y, radius, earth.angle, timestamp);
+  } else {
   const earthGradient = ctx.createRadialGradient(
     x - radius * 0.3, y - radius * 0.3, 0,
     x, y, radius
@@ -845,16 +854,172 @@ function drawEarthMagnetosphere(
   ctx.arc(x, y, radius, 0, Math.PI * 2);
   ctx.fillStyle = nightGradient;
   ctx.fill();
+  }
 
   // Aurora ellipses (wireframe style - matching the SVG)
+  if (!realisticEarth) {
+    ctx.beginPath();
+    ctx.ellipse(x, y - radius * 0.4, radius * 0.45, radius * 0.15, 0, 0, Math.PI * 2);
+    ctx.strokeStyle = '#1A1A1A';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.ellipse(x, y + radius * 0.4, radius * 0.45, radius * 0.15, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+}
+
+// Realistic blue-marble Earth for the close-up view
+function drawRealisticEarth(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  radius: number,
+  angle: number,
+  timestamp: number
+) {
+  // Atmosphere halo
+  const atmo = ctx.createRadialGradient(x, y, radius * 0.95, x, y, radius * 1.35);
+  atmo.addColorStop(0, 'rgba(120, 180, 255, 0.4)');
+  atmo.addColorStop(0.5, 'rgba(100, 160, 255, 0.16)');
+  atmo.addColorStop(1, 'rgba(100, 160, 255, 0)');
   ctx.beginPath();
-  ctx.ellipse(x, y - radius * 0.4, radius * 0.45, radius * 0.15, 0, 0, Math.PI * 2);
-  ctx.strokeStyle = '#1A1A1A';
-  ctx.lineWidth = 1;
+  ctx.arc(x, y, radius * 1.35, 0, Math.PI * 2);
+  ctx.fillStyle = atmo;
+  ctx.fill();
+
+  // Ocean sphere (light from the left, where the Sun sits in this view)
+  const ocean = ctx.createRadialGradient(
+    x - radius * 0.35, y - radius * 0.35, radius * 0.1,
+    x, y, radius
+  );
+  ocean.addColorStop(0, '#7ec8f7');
+  ocean.addColorStop(0.4, '#2f7fd1');
+  ocean.addColorStop(0.75, '#1a4f9c');
+  ocean.addColorStop(1, '#0d2f66');
+  ctx.beginPath();
+  ctx.arc(x, y, radius, 0, Math.PI * 2);
+  ctx.fillStyle = ocean;
+  ctx.fill();
+
+  // Continents + ice caps (clipped to the disc, rotating with earth.angle)
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(x, y, radius * 0.995, 0, Math.PI * 2);
+  ctx.clip();
+
+  const continents: Array<Array<{ ax: number; ay: number }>> = [
+    [{ ax: -0.55, ay: -0.35 }, { ax: -0.25, ay: -0.5 }, { ax: 0.05, ay: -0.42 }, { ax: 0.1, ay: -0.15 }, { ax: -0.12, ay: 0.05 }, { ax: -0.42, ay: -0.1 }],   // Americas
+    [{ ax: -0.15, ay: 0.15 }, { ax: 0.05, ay: 0.2 }, { ax: 0.05, ay: 0.62 }, { ax: -0.18, ay: 0.55 }],                                                          // S. America tail
+    [{ ax: 0.25, ay: -0.3 }, { ax: 0.55, ay: -0.42 }, { ax: 0.75, ay: -0.2 }, { ax: 0.6, ay: 0.05 }, { ax: 0.35, ay: 0.0 }],                                     // Africa/Europe
+    [{ ax: 0.5, ay: -0.65 }, { ax: 0.85, ay: -0.6 }, { ax: 0.9, ay: -0.35 }, { ax: 0.65, ay: -0.35 }],                                                           // Asia north
+    [{ ax: 0.35, ay: 0.35 }, { ax: 0.6, ay: 0.3 }, { ax: 0.75, ay: 0.5 }, { ax: 0.5, ay: 0.62 }],                                                               // Australia
+  ];
+
+  continents.forEach(continent => {
+    ctx.beginPath();
+    continent.forEach((pt, i) => {
+      const ptAngle = Math.atan2(pt.ay, pt.ax) + angle;
+      const dist = Math.sqrt(pt.ax * pt.ax + pt.ay * pt.ay) * radius * 0.92;
+      const px = x + Math.cos(ptAngle) * dist;
+      const py = y + Math.sin(ptAngle) * dist;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    });
+    ctx.closePath();
+    const land = ctx.createLinearGradient(x - radius, y - radius, x + radius, y + radius);
+    land.addColorStop(0, '#3d8b40');
+    land.addColorStop(0.5, '#2e7d32');
+    land.addColorStop(1, '#1f5e20');
+    ctx.fillStyle = land;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(20, 60, 20, 0.35)';
+    ctx.lineWidth = Math.max(1, radius * 0.012);
+    ctx.stroke();
+  });
+
+  // Polar ice caps — subtle white hugging the poles
+  ctx.globalAlpha = 0.45;
+  ctx.fillStyle = '#f4f9ff';
+  ctx.beginPath();
+  ctx.ellipse(x, y - radius * 0.88, radius * 0.22, radius * 0.07, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(x, y + radius * 0.9, radius * 0.26, radius * 0.07, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  // Clouds — translucent white swirls drifting slightly faster than the surface
+  const cloudDrift = angle * 1.35 + timestamp * 0.00012;
+  const clouds = [
+    { ax: -0.5, ay: -0.25, r: 0.22 },
+    { ax: 0.0, ay: -0.45, r: 0.26 },
+    { ax: 0.3, ay: -0.1, r: 0.2 },
+    { ax: 0.05, ay: 0.2, r: 0.3 },
+    { ax: -0.35, ay: 0.35, r: 0.24 },
+    { ax: 0.55, ay: 0.35, r: 0.2 },
+    { ax: 0.7, ay: -0.45, r: 0.16 },
+  ];
+  clouds.forEach(cloud => {
+    const cAngle = Math.atan2(cloud.ay, cloud.ax) + cloudDrift;
+    const dist = Math.sqrt(cloud.ax * cloud.ax + cloud.ay * cloud.ay) * radius * 0.9;
+    const px = x + Math.cos(cAngle) * dist;
+    const py = y + Math.sin(cAngle) * dist;
+    const cloudGrad = ctx.createRadialGradient(px, py, 0, px, py, cloud.r * radius);
+    cloudGrad.addColorStop(0, 'rgba(255, 255, 255, 0.55)');
+    cloudGrad.addColorStop(0.6, 'rgba(255, 255, 255, 0.28)');
+    cloudGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.beginPath();
+    ctx.arc(px, py, cloud.r * radius, 0, Math.PI * 2);
+    ctx.fillStyle = cloudGrad;
+    ctx.fill();
+  });
+
+  ctx.restore();
+
+  // Terminator (night side, away from the Sun on the right)
+  const night = ctx.createRadialGradient(
+    x + radius * 0.55, y, radius * 0.2,
+    x, y, radius
+  );
+  night.addColorStop(0, 'rgba(0, 0, 10, 0.55)');
+  night.addColorStop(0.4, 'rgba(0, 0, 10, 0.3)');
+  night.addColorStop(1, 'rgba(0, 0, 10, 0)');
+  ctx.beginPath();
+  ctx.arc(x, y, radius, 0, Math.PI * 2);
+  ctx.fillStyle = night;
+  ctx.fill();
+
+  // Specular ocean glint on the sunlit side
+  const glint = ctx.createRadialGradient(
+    x - radius * 0.45, y - radius * 0.4, 0,
+    x - radius * 0.45, y - radius * 0.4, radius * 0.35
+  );
+  glint.addColorStop(0, 'rgba(255, 255, 255, 0.35)');
+  glint.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  ctx.beginPath();
+  ctx.arc(x, y, radius * 0.99, 0, Math.PI * 2);
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(x, y, radius * 0.99, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.fillStyle = glint;
+  ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+  ctx.restore();
+
+  // Sunlit rim light on the left edge
+  ctx.beginPath();
+  ctx.arc(x, y, radius * 0.99, Math.PI * 0.6, Math.PI * 1.4);
+  ctx.strokeStyle = 'rgba(190, 225, 255, 0.7)';
+  ctx.lineWidth = Math.max(1.5, radius * 0.03);
   ctx.stroke();
 
+  // Crisp outline
   ctx.beginPath();
-  ctx.ellipse(x, y + radius * 0.4, radius * 0.45, radius * 0.15, 0, 0, Math.PI * 2);
+  ctx.arc(x, y, radius, 0, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(10, 30, 60, 0.6)';
+  ctx.lineWidth = Math.max(1, radius * 0.012);
   ctx.stroke();
 }
 
@@ -872,7 +1037,7 @@ function drawLabels(
   ctx.font = 'bold 14px "Inter", sans-serif';
   ctx.fillStyle = '#1D4ED8';
   ctx.textAlign = 'left';
-  ctx.fillText('SOLAR JUKEBOX — COSMIC VIEW', 16, 28);
+  ctx.fillText('HELIOPHON — COSMIC VIEW', 16, 28);
 
   // Mode badge
   ctx.font = '11px "Inter", sans-serif';
