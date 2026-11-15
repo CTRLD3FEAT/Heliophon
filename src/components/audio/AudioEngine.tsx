@@ -138,17 +138,18 @@ export function AudioEngine({ data, isPlaying, volume, isSimulation, onAudioRead
         dstSubRef.current.triggerAttack('C0'); // ~16Hz
 
         // ==================== LAYER 4: CME Arpeggiator ====================
-        // Arpeggio rate tracks CME speed
+        // Arpeggio rate tracks CME speed. Dissonant, descending pattern —
+        // sounds like a warning, not a melody.
         cmeSynthRef.current = new Tone.PolySynth(Tone.Synth, {
-          oscillator: { type: 'triangle' },
-          envelope: { attack: 0.05, decay: 0.3, sustain: 0, release: 0.5 },
+          oscillator: { type: 'sawtooth' },
+          envelope: { attack: 0.01, decay: 0.15, sustain: 0, release: 0.3 },
         });
         cmeGainRef.current = new Tone.Gain(0.15); // Increased from 0.08
         cmeSynthRef.current.connect(cmeGainRef.current);
         cmeGainRef.current.connect(masterGainRef.current);
 
-        // Arpeggio loop
-        const cmeNotes = ['C4', 'E4', 'G4', 'C5', 'E5', 'G5'];
+        // Dissonant descending pattern (tritone + minor 7th = tension)
+        const cmeNotes = ['C4', 'F#4', 'Bb4', 'C5', 'F#5', 'Bb5'];
         let cmeNoteIndex = 0;
         cmeArpRef.current = new Tone.Loop((time) => {
           const note = cmeNotes[cmeNoteIndex % cmeNotes.length];
