@@ -26,20 +26,17 @@ Space weather storms — **CMEs, flares, geomagnetic storms** — threaten power
 
 ```mermaid
 flowchart LR
-    Data[Live Data] --> Layers[5 Continuous Layers]
-    Layers --> Audio[Output]
-    
-    Data -->|Kp 0-9| L1[Kp Bass<br/>C2 to A2, G0-G5]
-    Data -->|GOES A-X| L2[GOES Lead<br/>Sine to Square, 400-5k Hz]
-    Data -->|Dst| L3[Dst Rumble<br/>15-30 Hz, abs Dst]
-    Data -->|CME km/s| L4[CME Arp<br/>0.2-4 Hz, C-E-G]
-    Data -->|Proton| L5[Solar Wind<br/>Bandpass, log scale]
-    
-    Data -.->|Kp >= 7| A1[Grid G3+]
-    Data -.->|Kp >= 6 or M/X| A2[GPS Disrupt]
-    Data -.->|Kp >= 6| A3[Sat Drag]
-    Data -.->|X or CME>1500| A4[Radiation]
-    Data -.->|M/X| A5[Comms]
+    Data[Live Data] --> L1[Kp Bass]
+    Data --> L2[GOES Lead]
+    Data --> L3[Dst Rumble]
+    Data --> L4[CME Arp]
+    Data --> L5[Solar Wind]
+    L1 & L2 & L3 & L4 & L5 --> Audio[Output]
+    Data -.-> A1[Grid G3+]
+    Data -.-> A2[GPS Disrupt]
+    Data -.-> A3[Sat Drag]
+    Data -.-> A4[Radiation]
+    Data -.-> A5[Comms]
 ```
 
 ### Layer Mapping
@@ -72,15 +69,7 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    BG[Background] --> Orbits[Orbit Rings]
-    Orbits --> Parker[Parker Spiral]
-    Parker --> Sun[Sun]
-    Sun --> Planets[Planets]
-    Planets --> CME[CME Cone]
-    CME --> SW[Solar Wind]
-    SW --> CMEP[CME Particles]
-    CMEP --> Mag[Magnetosphere]
-    Mag --> Earth[Earth]
+    BG[Background] --> Orbits --> Parker --> Sun --> Planets --> CME --> SW --> CMEP --> Mag --> Earth[Earth]
 ```
 
 | Layer | Description |
@@ -170,16 +159,10 @@ npm run dev  # http://localhost:3000
 
 ```mermaid
 flowchart TB
-    Page[page] --> API[nasa-api]
-    Page --> Dash[Dashboard]
-    Page --> Side[EventSidebar]
-    Page --> Cosmic[CosmicAnimation]
-    Page --> AVis[AudioVisualizer]
-    Page --> FVis[FrequencyVisualizer]
-    Page --> AEng[AudioEngine]
+    Page[page.tsx] --> API & Dash & Side & Cosmic & AVis & FVis & AEng
     Dash --> AEng
-    API --> Types[types]
-    Side --> Hist[historical-data]
+    API --> Types[types/index.ts]
+    Side --> Hist[data/*.json]
 ```
 
 **Contract-first**: `SpaceWeatherEvent` — single interface for all components.
