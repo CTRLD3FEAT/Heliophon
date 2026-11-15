@@ -152,23 +152,24 @@ export function AudioEngine({ data, isPlaying, volume, isSimulation, onAudioRead
         dstSubRef.current.triggerAttack('C0'); // ~16Hz
 
         // ==================== LAYER 4: CME Arpeggiator ====================
-        // Arpeggio rate tracks CME speed. Dissonant, descending pattern —
-        // sounds like a warning, not a melody.
+        // Arpeggio rate tracks CME speed. Classic two-tone warning siren
+        // (like European emergency vehicles) — alternating high/low pulses.
         cmeSynthRef.current = new Tone.PolySynth(Tone.Synth, {
-          oscillator: { type: 'sawtooth' },
-          envelope: { attack: 0.01, decay: 0.15, sustain: 0, release: 0.3 },
+          oscillator: { type: 'square' }, // Square = harsh, alarm-like
+          envelope: { attack: 0.001, decay: 0.1, sustain: 0, release: 0.1 },
         });
-        cmeGainRef.current = new Tone.Gain(0.15); // Increased from 0.08
+        cmeGainRef.current = new Tone.Gain(0.15);
         cmeSynthRef.current.connect(cmeGainRef.current);
         cmeGainRef.current.connect(masterGainRef.current);
 
-        // Dissonant descending pattern (tritone + minor 7th = tension)
-        const cmeNotes = ['C4', 'F#4', 'Bb4', 'C5', 'F#5', 'Bb5'];
-        let cmeNoteIndex = 0;
+        // Two-tone siren: alternating high (C6) and low (C5) — classic warning pattern
+        const sirenHigh = 'C6';
+        const sirenLow = 'C5';
+        let sirenState = 0;
         cmeArpRef.current = new Tone.Loop((time) => {
-          const note = cmeNotes[cmeNoteIndex % cmeNotes.length];
+          const note = sirenState === 0 ? sirenHigh : sirenLow;
           cmeSynthRef.current?.triggerAttackRelease(note, '16n', time);
-          cmeNoteIndex++;
+          sirenState = 1 - sirenState; // Alternate
         }, '4n').start(0);
 
         // ==================== LAYER 5: Solar Wind Noise ====================
