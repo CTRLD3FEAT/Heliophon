@@ -29,17 +29,17 @@ flowchart LR
     Data[☀️ Live Data] --> Layers[🎵 5 Continuous Layers]
     Layers --> Audio[🔊 Output]
     
-    Data -->|Kp 0–9| L1[Kp Bass<br/>C2→A2 • G0–G5]
-    Data -->|GOES A→X| L2[GOES Lead<br/>Sine→Square • 400→5k Hz]
-    Data -->|Dst nT| L3[Dst Rumble<br/>15→30 Hz • \|Dst\|]
-    Data -->|CME km/s| L4[CME Arp<br/>0.2→4 Hz • C-E-G]
+    Data -->|Kp 0-9| L1[Kp Bass<br/>C2→A2 • G0-G5]
+    Data -->|GOES A-X| L2[GOES Lead<br/>Sine-Square • 400-5k Hz]
+    Data -->|Dst nT| L3[Dst Rumble<br/>15-30 Hz • |Dst|]
+    Data -->|CME km/s| L4[CME Arp<br/>0.2-4 Hz • C-E-G]
     Data -->|Proton pfu| L5[Solar Wind<br/>Bandpass • log scale]
     
-    Data -.->|Kp ≥ 7| A1[⚡ Grid G3+]
-    Data -.->|Kp ≥ 6 / M/X| A2[📡 GPS Disrupt]
-    Data -.->|Kp ≥ 6| A3[🛰 Sat Drag]
-    Data -.->|X / >1500| A4[☢ Radiation]
-    Data -.->|M/X| A5[📻 Comms]
+    Data -.->|Kp >= 7| A1[Grid G3+]
+    Data -.->|Kp >= 6 / M/X| A2[GPS Disrupt]
+    Data -.->|Kp >= 6| A3[Sat Drag]
+    Data -.->|X / >1500| A4[Radiation]
+    Data -.->|M/X| A5[Comms]
 ```
 
 ### Layer Mapping
@@ -170,32 +170,16 @@ npm run dev  # http://localhost:3000
 
 ```mermaid
 flowchart TB
-    subgraph App[Next.js 15 App Router]
-        Page[page.tsx]
-        Dash[Dashboard.tsx]
-        Side[EventSidebar.tsx]
-        Cosmic[CosmicAnimation.tsx]
-        AVis[AudioVisualizer.tsx]
-        FVis[FrequencyVisualizer.tsx]
-        AEng[AudioEngine.tsx]
-    end
-
-    subgraph Data[Data Layer]
-        API[nasa-api.ts]
-        Types[types/index.ts]
-        Hist[data/*.json]
-    end
-
-    Page --> API
-    Page --> Dash
-    Page --> Side
-    Page --> Cosmic
-    Page --> AVis
-    Page --> FVis
-    Page --> AEng
+    Page[page.tsx] --> API[nasa-api.ts]
+    Page --> Dash[Dashboard.tsx]
+    Page --> Side[EventSidebar.tsx]
+    Page --> Cosmic[CosmicAnimation.tsx]
+    Page --> AVis[AudioVisualizer.tsx]
+    Page --> FVis[FrequencyVisualizer.tsx]
+    Page --> AEng[AudioEngine.tsx]
     Dash --> AEng
-    API --> Types
-    Side --> Hist
+    API --> Types[types/index.ts]
+    Side --> Hist[data/*.json]
 ```
 
 **Contract-first**: `SpaceWeatherEvent` — single interface for all components.
