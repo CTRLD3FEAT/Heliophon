@@ -94,7 +94,7 @@ export interface CMEForecast {
 }
 
 export interface FlareForecast {
-  flare: RawFlare;
+  flare: RawFlare | null;
   probabilityMClass: number;         // 0-1
   probabilityXClass: number;         // 0-1
   probabilityProtonEvent: number;    // 0-1 (SEP)
@@ -582,7 +582,7 @@ export async function fetchFlareForecast(): Promise<FlareForecast | null> {
     // Parse flare probability data (format varies)
     // For now, return structured mock based on typical NOAA forecast format
     return {
-      flare: null as any,
+      flare: null,
       probabilityMClass: 0.3,
       probabilityXClass: 0.1,
       probabilityProtonEvent: 0.05,
@@ -713,7 +713,7 @@ export function getMockForecast(): SpaceWeatherForecast {
       },
     ],
     flareForecast: {
-      flare: null as any,
+      flare: null,
       probabilityMClass: 0.6,
       probabilityXClass: 0.25,
       probabilityProtonEvent: 0.15,

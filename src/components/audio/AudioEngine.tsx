@@ -84,7 +84,7 @@ export function AudioEngine({ data, isPlaying, volume, isSimulation, onAudioRead
 
   // GOES class → oscillator type & filter
   type OscillatorType = 'sine' | 'square' | 'sawtooth' | 'triangle' | 'pwm' | 'pulse' | 'fmsawtooth' | 'fmsquare' | 'fmtriangle' | 'fmsine' | 'am';
-  const GOES_CONFIG: Record<string, { type: OscillatorType; filterFreq: number; filterQ: number; gain: number }> = {
+  const GOES_CONFIG: Record<string, { type: 'sine' | 'triangle' | 'sawtooth' | 'square'; filterFreq: number; filterQ: number; gain: number }> = {
     A: { type: 'sine', filterFreq: 400, filterQ: 1, gain: 0.05 },
     B: { type: 'sine', filterFreq: 600, filterQ: 1.5, gain: 0.08 },
     C: { type: 'triangle', filterFreq: 1000, filterQ: 2, gain: 0.12 },
@@ -265,7 +265,7 @@ export function AudioEngine({ data, isPlaying, volume, isSimulation, onAudioRead
     const modIndex = Math.min(10, Math.max(0, (kpIndex - 3) * 1.5)); // 0 at Kp<=3, up to 10 at Kp=9
     const kpBass = kpBassRef.current;
     if (kpBass) {
-      (kpBass as any).modulationIndex?.rampTo(modIndex, 1);
+      kpBass.modulationIndex?.rampTo(modIndex, 1);
     }
     // Gain increases with Kp for prominence
     if (kpGainRef.current) kpGainRef.current.gain.rampTo(0.1 + kpIndex * 0.015, 1);
@@ -274,7 +274,7 @@ export function AudioEngine({ data, isPlaying, volume, isSimulation, onAudioRead
     const flarePrefix = flareClass?.[0] || 'A';
     const goesCfg = GOES_CONFIG[flarePrefix] || GOES_CONFIG.A;
     if (goesLeadRef.current) {
-      (goesLeadRef.current as any).set({ oscillator: { type: goesCfg.type } });
+      goesLeadRef.current.set({ oscillator: { type: goesCfg.type } });
       goesLeadRef.current.volume.rampTo(goesCfg.gain, 0.5);
     }
     if (goesFilterRef.current) {

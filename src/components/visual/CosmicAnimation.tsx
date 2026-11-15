@@ -1,11 +1,24 @@
 'use client';
 
-import { useEffect, useRef, useMemo } from 'react';
+import { useEffect, useRef } from 'react';
 import { SpaceWeatherEvent } from '@/types';
 
 // Module-level mutable state for animation particles (avoids window global type issues)
-let solarWindParticles: any[] = [];
-let cmeParticles: any[] = [];
+interface Particle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;
+  maxLife: number;
+  size: number;
+  color: string;
+  type?: 'solar-wind' | 'cme' | 'aurora' | 'magnetosphere';
+  hitMagnetosphere?: boolean;
+}
+
+let solarWindParticles: Particle[] = [];
+let cmeParticles: Particle[] = [];
 let lastCmeSpawn = 0;
 let magnetosphereHit = false;
 
@@ -35,18 +48,6 @@ interface CelestialBody {
 
 // Add color/glowColor to sun
 
-interface Particle {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  life: number;
-  maxLife: number;
-  size: number;
-  color: string;
-  type: 'solar-wind' | 'cme' | 'aurora' | 'magnetosphere';
-}
-
 export function CosmicAnimation({
   data,
   isSimulation,
@@ -63,65 +64,65 @@ export function CosmicAnimation({
   const animationIdRef = useRef<number | null>(null);
   const timeRef = useRef(0);
 
-  const sun = useMemo((): CelestialBody => ({
-    x: 0,
-    y: 0,
-    radius: 38,
-    angle: 0,
-    distance: 0,
-    speed: 0,
-    color: '#FF4400',       // Bright orange-red (photosphere)
-    glowColor: '#FF0000',   // Intense red glow (chromosphere/corona)
-  }), []);
-
   // Realistic planet data (Earth = 1 AU = 185px, radius 9px baseline)
   const EARTH_DISTANCE = 185;
   const EARTH_RADIUS = 9;
   const BASE_SPEED = 0.000375; // Earth angular velocity (slowed for visual)
 
-  const earth = useMemo((): CelestialBody => ({
-    x: 0,
-    y: 0,
-    radius: EARTH_RADIUS,
-    angle: 0,
-    distance: EARTH_DISTANCE,                    // 1.00 AU
-    speed: BASE_SPEED * 1.0,                     // 365 days
-    color: '#4A90E2',       // Blue-white (oceans)
-    glowColor: '#1E3A5F',
-  }), []);
-
-  const mercury = useMemo((): CelestialBody => ({
-    x: 0,
-    y: 0,
-    radius: Math.round(EARTH_RADIUS * 0.38),     // 0.38 Earth radii
-    angle: 0,
-    distance: Math.round(EARTH_DISTANCE * 0.39), // 0.39 AU
-    speed: BASE_SPEED * 4.15,                    // 88 days
-    color: '#A0A0A0',       // Dark gray
-    glowColor: '#606060',
-  }), []);
-
-  const venus = useMemo((): CelestialBody => ({
-    x: 0,
-    y: 0,
-    radius: Math.round(EARTH_RADIUS * 0.95),     // 0.95 Earth radii
-    angle: 0,
-    distance: Math.round(EARTH_DISTANCE * 0.72), // 0.72 AU
-    speed: BASE_SPEED * 1.63,                    // 225 days
-    color: '#E6C87A',       // Yellowish-white (clouds)
-    glowColor: '#B8954A',
-  }), []);
-
-  const mars = useMemo((): CelestialBody => ({
-    x: 0,
-    y: 0,
-    radius: Math.round(EARTH_RADIUS * 0.53),     // 0.53 Earth radii
-    angle: 0,
-    distance: Math.round(EARTH_DISTANCE * 1.52), // 1.52 AU
-    speed: BASE_SPEED * 0.53,                    // 687 days
-    color: '#D94A2B',       // Red-orange
-    glowColor: '#8B2A1A',
-  }), []);
+  // Mutable animation state — held in a ref so the canvas loop can update positions
+  const bodiesRef = useRef<Record<'sun' | 'earth' | 'mercury' | 'venus' | 'mars', CelestialBody>>({
+    sun: {
+      x: 0,
+      y: 0,
+      radius: 38,
+      angle: 0,
+      distance: 0,
+      speed: 0,
+      color: '#FF4400',       // Bright orange-red (photosphere)
+      glowColor: '#FF0000',   // Intense red glow (chromosphere/corona)
+    },
+    earth: {
+      x: 0,
+      y: 0,
+      radius: EARTH_RADIUS,
+      angle: 0,
+      distance: EARTH_DISTANCE,                    // 1.00 AU
+      speed: BASE_SPEED * 1.0,                     // 365 days
+      color: '#4A90E2',       // Blue-white (oceans)
+      glowColor: '#1E3A5F',
+    },
+    mercury: {
+      x: 0,
+      y: 0,
+      radius: Math.round(EARTH_RADIUS * 0.38),     // 0.38 Earth radii
+      angle: 0,
+      distance: Math.round(EARTH_DISTANCE * 0.39), // 0.39 AU
+      speed: BASE_SPEED * 4.15,                    // 88 days
+      color: '#A0A0A0',       // Dark gray
+      glowColor: '#606060',
+    },
+    venus: {
+      x: 0,
+      y: 0,
+      radius: Math.round(EARTH_RADIUS * 0.95),     // 0.95 Earth radii
+      angle: 0,
+      distance: Math.round(EARTH_DISTANCE * 0.72), // 0.72 AU
+      speed: BASE_SPEED * 1.63,                    // 225 days
+      color: '#E6C87A',       // Yellowish-white (clouds)
+      glowColor: '#B8954A',
+    },
+    mars: {
+      x: 0,
+      y: 0,
+      radius: Math.round(EARTH_RADIUS * 0.53),     // 0.53 Earth radii
+      angle: 0,
+      distance: Math.round(EARTH_DISTANCE * 1.52), // 1.52 AU
+      speed: BASE_SPEED * 0.53,                    // 687 days
+      color: '#D94A2B',       // Red-orange
+      glowColor: '#8B2A1A',
+    },
+  });
+  const { sun, earth, mercury, venus, mars } = bodiesRef.current;
 
   const stormIntensity = data.stormIntensity;
   const cmeSpeed = data.cmeSpeed;
@@ -561,7 +562,7 @@ function drawSolarWind(
 
   const magnetosphereRadius = earth.radius * magnetosphereCompression;
 
-  particles.forEach((p: any) => {
+  particles.forEach((p) => {
     p.x += p.vx * dt * 0.02;
     p.y += p.vy * dt * 0.02;
     p.life += dt * 0.01;
@@ -637,7 +638,7 @@ function drawCME(
 
   const magnetosphereRadius = earth.radius * (1 + stormIntensity * 0.8);
 
-  cmeParticles.forEach((p: any, idx: number) => {
+  cmeParticles.forEach((p, idx: number) => {
     p.x += p.vx * dt * 0.02;
     p.y += p.vy * dt * 0.02;
     p.life += dt * 0.01;

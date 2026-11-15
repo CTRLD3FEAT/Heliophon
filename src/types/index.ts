@@ -22,6 +22,16 @@ export interface SpaceWeatherEvent {
   // Carried from fetchSpaceVitals when one or more live sources failed.
   // Lets the UI surface "live data unavailable" instead of a silent zeroed storm.
   _sourceErrors?: string[];
+
+  // Historical event metadata (present on events imported from src/data/*.json)
+  _meta?: {
+    name?: string;
+    confidence?: string; // "direct" | "partial" | "historical"
+    date?: string;
+    notes?: string;
+    estimatedArrival?: string;
+    [key: string]: unknown;
+  };
 }
 
 export interface SpaceWeatherForecast {

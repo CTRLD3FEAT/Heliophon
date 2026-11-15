@@ -22,11 +22,13 @@ export function Dashboard({
   const { isPlaying, setIsPlaying, volume, setVolume, toggle } = useAudioEngine();
   const [isReady, setIsReady] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [prevTimestamp, setPrevTimestamp] = useState(data.timestamp);
 
-  // Update last updated timestamp when data changes
-  useEffect(() => {
+  // Update last updated timestamp when data changes (adjust state during render)
+  if (prevTimestamp !== data.timestamp) {
+    setPrevTimestamp(data.timestamp);
     setLastUpdated(new Date());
-  }, [data.timestamp]);
+  }
 
   // Handle audio context activation (requires user gesture)
   const handlePlayClick = () => {
@@ -123,7 +125,7 @@ export function Dashboard({
               {isSimulation ? 'Exit Simulation' : 'Simulate 1989 Quebec Storm'}
             </button>
 
-            <div className="text-[10px] text-slate-500 whitespace-nowrap">
+            <div className="text-[10px] text-slate-400 whitespace-nowrap">
               Updated: {lastUpdated ? lastUpdated.toLocaleTimeString() : '—'}
             </div>
           </div>
@@ -378,12 +380,12 @@ export function Dashboard({
 
         {/* Educational Context */}
         <section className="flex-shrink-0 bg-slate-900/50 border border-slate-800 rounded-xl p-3">
-          <h2 className="text-sm font-semibold text-cyan-300 mb-2">What You're Hearing</h2>
+          <h2 className="text-sm font-semibold text-cyan-300 mb-2">What You&apos;re Hearing</h2>
           <div className="space-y-1 text-[11px] text-slate-300">
             <p><strong>Low Hum:</strong> Calm conditions (Kp ≤ 3, no Earth-directed CME)</p>
             <p><strong>Rising Pitch & Pulsing:</strong> Growing storm energy</p>
             <p><strong>Red Alert Motif:</strong> NOAA G3+ geomagnetic storm watch</p>
-            <p className="text-[10px] text-slate-500 mt-1 pt-1 border-t border-slate-800">
+            <p className="text-[10px] text-slate-400 mt-1 pt-1 border-t border-slate-800">
               Audio is a perceptual sonification — a design choice, not a physical measurement.
               We communicate NOAA SWPC data; we do not issue alerts.
             </p>
@@ -391,7 +393,7 @@ export function Dashboard({
         </section>
 
         {/* Footer */}
-        <footer className="flex-shrink-0 mt-auto pt-3 border-t border-slate-800 text-center text-[10px] text-slate-500">
+        <footer className="flex-shrink-0 mt-auto pt-3 border-t border-slate-800 text-center text-[10px] text-slate-400">
           <p>Data: NASA DONKI • NOAA SWPC</p>
           <p className="mt-0.5">NASA Space Apps Challenge 2026</p>
         </footer>
