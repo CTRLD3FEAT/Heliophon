@@ -26,14 +26,14 @@ Space weather storms — **CMEs, flares, geomagnetic storms** — threaten power
 
 ```mermaid
 flowchart LR
-    Data[☀️ Live Data] --> Layers[🎵 5 Continuous Layers]
-    Layers --> Audio[🔊 Output]
+    Data[Live Data] --> Layers[5 Continuous Layers]
+    Layers --> Audio[Output]
     
-    Data -->|Kp 0-9| L1[Kp Bass<br/>C2→A2 • G0-G5]
-    Data -->|GOES A-X| L2[GOES Lead<br/>Sine-Square • 400-5k Hz]
-    Data -->|Dst nT| L3[Dst Rumble<br/>15-30 Hz • |Dst|]
-    Data -->|CME km/s| L4[CME Arp<br/>0.2-4 Hz • C-E-G]
-    Data -->|Proton pfu| L5[Solar Wind<br/>Bandpass • log scale]
+    Data -->|Kp 0-9| L1[Kp Bass<br/>C2 to A2, G0-G5]
+    Data -->|GOES A-X| L2[GOES Lead<br/>Sine to Square, 400-5k Hz]
+    Data -->|Dst nT| L3[Dst Rumble<br/>15-30 Hz, |Dst|]
+    Data -->|CME km/s| L4[CME Arp<br/>0.2-4 Hz, C-E-G]
+    Data -->|Proton pfu| L5[Solar Wind<br/>Bandpass, log scale]
     
     Data -.->|Kp >= 7| A1[Grid G3+]
     Data -.->|Kp >= 6 / M/X| A2[GPS Disrupt]
@@ -178,8 +178,8 @@ flowchart TB
     Page --> FVis[FrequencyVisualizer.tsx]
     Page --> AEng[AudioEngine.tsx]
     Dash --> AEng
-    API --> Types[types/index.ts]
-    Side --> Hist[data/*.json]
+    API --> Types[types-index.ts]
+    Side --> Hist[data-json]
 ```
 
 **Contract-first**: `SpaceWeatherEvent` — single interface for all components.
