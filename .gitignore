@@ -36,6 +36,11 @@ yarn-error.log*
 # dev server log
 dev.log
 
+# confidential / private
+AGENTS.md
+*wireframe*.png
+*wireframe*.html
+
 # vercel
 .vercel
 
