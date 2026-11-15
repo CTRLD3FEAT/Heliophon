@@ -26,42 +26,20 @@ Space weather storms — **CMEs, flares, geomagnetic storms** — threaten power
 
 ```mermaid
 flowchart LR
-    subgraph In["☀️ Live Data"]
-        Kp["Kp-index\n0–9"]
-        GOES["GOES X-ray\nA→X"]
-        Dst["Dst index\nnT"]
-        CME["CME Speed\nkm/s"]
-        SW["Proton Flux\npfu"]
-    end
-
-    subgraph Layers["🎵 Continuous Layers"]
-        L1["Kp Bass\nC2→A2 | G0–G5"]
-        L2["GOES Lead\nSine→Square | 400→5k Hz"]
-        L3["Dst Rumble\n15→30 Hz | |Dst|"]
-        L4["CME Arp\n0.2→4 Hz | C-E-G"]
-        L5["Solar Wind\nBandpass | log flux"]
-    end
-
-    subgraph Alerts["⚡ Threshold Alerts"]
-        A1["Grid G3+\nMinor chord"]
-        A2["GPS G2+ / M/X\nGlitchy trills"]
-        A3["Drag G2+\nDescending glide"]
-        A4["Radiation X / >1500\nNoise bursts"]
-        A5["Comms M/X\nStutter square"]
-    end
-
-    Kp --> L1
-    GOES --> L2
-    Dst --> L3
-    CME --> L4
-    SW --> L5
-
-    Kp -.-> A1
-    Kp -.-> A2
-    Kp -.-> A3
-    GOES -.-> A4
-    CME -.-> A4
-    GOES -.-> A5
+    Data[☀️ Live Data] --> Layers[🎵 5 Continuous Layers]
+    Layers --> Audio[🔊 Output]
+    
+    Data -->|Kp 0–9| L1[Kp Bass<br/>C2→A2 • G0–G5]
+    Data -->|GOES A→X| L2[GOES Lead<br/>Sine→Square • 400→5k Hz]
+    Data -->|Dst nT| L3[Dst Rumble<br/>15→30 Hz • \|Dst\|]
+    Data -->|CME km/s| L4[CME Arp<br/>0.2→4 Hz • C-E-G]
+    Data -->|Proton pfu| L5[Solar Wind<br/>Bandpass • log scale]
+    
+    Data -.->|Kp ≥ 7| A1[⚡ Grid G3+]
+    Data -.->|Kp ≥ 6 / M/X| A2[📡 GPS Disrupt]
+    Data -.->|Kp ≥ 6| A3[🛰 Sat Drag]
+    Data -.->|X / >1500| A4[☢ Radiation]
+    Data -.->|M/X| A5[📻 Comms]
 ```
 
 ### Layer Mapping
@@ -92,8 +70,17 @@ flowchart LR
 
 ### Canvas Layers (back → front)
 
-```
-Background → Orbit Rings → Parker Spiral → Sun → Planets → CME Cone → Solar Wind → CME Particles → Magnetosphere → Earth
+```mermaid
+flowchart LR
+    BG[Background] --> Orbits[Orbit Rings]
+    Orbits --> Parker[Parker Spiral]
+    Parker --> Sun[Sun]
+    Sun --> Planets[Planets]
+    Planets --> CME[CME Cone]
+    CME --> SW[Solar Wind]
+    SW --> CMEP[CME Particles]
+    CMEP --> Mag[Magnetosphere]
+    Mag --> Earth[Earth]
 ```
 
 | Layer | Description |
@@ -183,20 +170,20 @@ npm run dev  # http://localhost:3000
 
 ```mermaid
 flowchart TB
-    subgraph App["Next.js 15 App Router"]
-        Page["page.tsx\nFetch, state, layout"]
-        Dash["Dashboard.tsx\nTelemetry, risk, audio"]
-        Side["EventSidebar.tsx\nHistory selector + details"]
-        Cosmic["CosmicAnimation.tsx\nCanvas: Sun-Earth system"]
-        AVis["AudioVisualizer.tsx\nWaveform bar"]
-        FVis["FrequencyVisualizer.tsx\nSpectrum"]
-        AEng["AudioEngine.tsx\nTone.js + hook"]
+    subgraph App[Next.js 15 App Router]
+        Page[page.tsx]
+        Dash[Dashboard.tsx]
+        Side[EventSidebar.tsx]
+        Cosmic[CosmicAnimation.tsx]
+        AVis[AudioVisualizer.tsx]
+        FVis[FrequencyVisualizer.tsx]
+        AEng[AudioEngine.tsx]
     end
 
-    subgraph Data["Data Layer"]
-        API["nasa-api.ts\nDONKI+NOAA+Kyoto fetchers"]
-        Types["types/index.ts\nSpaceWeatherEvent"]
-        Hist["data/*.json\n5 events + mock"]
+    subgraph Data[Data Layer]
+        API[nasa-api.ts]
+        Types[types/index.ts]
+        Hist[data/*.json]
     end
 
     Page --> API
