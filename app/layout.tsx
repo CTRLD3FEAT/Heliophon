@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Solar Jukebox — Space Weather Sonification",
+  title: "Heliophon — Space Weather Sonification",
   description: "Accessible space weather sonification. Turn NASA and NOAA space weather data into sound so operators can hear the state of the grid.",
   manifest: "/manifest.webmanifest",
   icons: {

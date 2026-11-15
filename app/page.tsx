@@ -5,10 +5,12 @@ import { Dashboard } from '@/components/dashboard/Dashboard';
 import { EventSidebar } from '@/components/ui/EventSidebar';
 import { CosmicAnimation } from '@/components/visual/CosmicAnimation';
 import { fetchSpaceVitals, getMockSpaceVitals, fetchSpaceWeatherForecast, getMockForecast, getCachedLiveData, setCachedLiveData, getCacheAgeMs, formatCacheAge } from '@/lib/nasa-api';
-import { SpaceWeatherEvent } from '@/types';
+import { SpaceWeatherEvent, SpaceWeatherForecast } from '@/types';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { AudioEngine, useAudioEngine } from '@/components/audio/AudioEngine';
 import { AudioVisualizer } from '@/components/visual/AudioVisualizer';
+import { EducationalPanel } from '@/components/ui/EducationalPanel';
+import Link from 'next/link';
 import { clsx } from 'clsx';
 
 // Import all historical events
@@ -27,12 +29,16 @@ const HISTORICAL_EVENTS = [
 ] as const;
 
 export default function Home() {
-  const [selectedEvent, setSelectedEvent] = useState<SpaceWeatherEvent | null>(null);
+  // Load mock data immediately for local dev (lazy initializers, no effect needed)
+  const [selectedEvent, setSelectedEvent] = useState<SpaceWeatherEvent | null>(() => {
+    const mockData = getMockSpaceVitals();
+    return { ...mockData, forecast: getMockForecast() };
+  });
   const [isLiveMode, setIsLiveMode] = useState(false);
   const [liveData, setLiveData] = useState<SpaceWeatherEvent | null>(null);
   const [isLoadingLive, setIsLoadingLive] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [forecast, setForecast] = useState<any>(null);
+  const [error, setError] = useState<string | null>(() => 'Cached data — live API unavailable (local dev)');
+  const [forecast, setForecast] = useState<SpaceWeatherForecast | null>(() => getMockForecast());
   const [showDashboard, setShowDashboard] = useState(true);
   const [cacheAge, setCacheAge] = useState<string>('just now');
   const reducedMotion = useReducedMotion();
@@ -54,6 +60,8 @@ export default function Home() {
   const [isReady, setIsReady] = useState(false);
   const [playbackProgress, setPlaybackProgress] = useState(0);
   const [showWhatYoureHearing, setShowWhatYoureHearing] = useState(false);
+  const [showEducationalPanel, setShowEducationalPanel] = useState(false);
+  const [showRefreshConfirm, setShowRefreshConfirm] = useState(false);
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Sync playback progress when audio is playing
@@ -88,32 +96,25 @@ export default function Home() {
     return `${mm}:${ss}`;
   };
 
-  // Load mock data immediately for local dev
-  useEffect(() => {
-    const mockData = getMockSpaceVitals();
-    const mockForecast = getMockForecast();
-    setSelectedEvent({ ...mockData, forecast: mockForecast });
-    setError('Cached data — live API unavailable (local dev)');
-    setForecast(mockForecast);
-  }, []);
-
-  // Fetch live data when live mode is enabled (uses 12h cache)
-  const fetchLiveData = useCallback(async () => {
-    // First check cache
-    const cached = getCachedLiveData();
-    if (cached) {
-      const ageMs = getCacheAgeMs();
-      if (ageMs !== null) setCacheAge(formatCacheAge(ageMs));
-      setLiveData(cached);
-      setForecast(getMockForecast()); // Forecast not cached, use mock
-      if (isLiveMode) {
-        setSelectedEvent({ ...cached, forecast: getMockForecast() });
+  // Fetch live data (uses 20-min cache, only called on page load or explicit refresh)
+  const fetchLiveData = useCallback(async (forceRefresh = false) => {
+    // First check cache (unless forced)
+    if (!forceRefresh) {
+      const cached = getCachedLiveData();
+      if (cached) {
+        const ageMs = getCacheAgeMs();
+        if (ageMs !== null) setCacheAge(formatCacheAge(ageMs));
+        setLiveData(cached);
+        setForecast(getMockForecast()); // Forecast not cached, use mock
+        if (isLiveMode) {
+          setSelectedEvent({ ...cached, forecast: getMockForecast() });
+        }
+        setIsLoadingLive(false);
+        return;
       }
-      setIsLoadingLive(false);
-      return;
     }
 
-    // No valid cache - fetch from APIs
+    // No valid cache or force refresh - fetch from APIs
     setIsLoadingLive(true);
     setError(null);
     try {
@@ -141,7 +142,7 @@ export default function Home() {
     } finally {
       setIsLoadingLive(false);
     }
-  }, [isLiveMode]);
+  }, []); // No deps - only called explicitly
 
   // Update cache age display every minute
   useEffect(() => {
@@ -156,32 +157,48 @@ export default function Home() {
     return () => clearInterval(interval);
   }, []);
 
+  // Load live data once on mount so it's ready when user switches to Live mode
   useEffect(() => {
-    if (isLiveMode) {
-      fetchLiveData(); // Fetch once when entering Live mode
-    }
-  }, [isLiveMode, fetchLiveData]);
+    const timer = setTimeout(() => { void fetchLiveData(); }, 0);
+    return () => clearTimeout(timer);
+  }, [fetchLiveData]);
 
   const handleSelectEvent = (event: SpaceWeatherEvent) => {
-    const historicalEvent = event as any;
+    const historicalEvent = event;
     const eventWithForecast = historicalEvent._meta
       ? { ...event, forecast: getMockForecast() }
       : event;
     setSelectedEvent(eventWithForecast);
-    setIsLiveMode(false);
+    // Only switch to Simulation mode if selecting a historical event
+    // If selecting liveData, stay in Live mode
+    const isLiveEvent = event.timestamp === liveData?.timestamp;
+    if (!isLiveEvent) {
+      setIsLiveMode(false);
+    }
   };
 
   const handleToggleLiveMode = () => {
     const next = !isLiveMode;
     setIsLiveMode(next);
-    if (next) {
-      fetchLiveData();
+    if (next && liveData) {
+      // Switching to Live mode - select the live data event
+      setSelectedEvent({ ...liveData, forecast: getMockForecast() });
+    } else if (!next) {
+      // Switching to Simulation mode - select the first historical event
+      const firstEvent = HISTORICAL_EVENTS[0];
+      const firstWithForecast = firstEvent._meta
+        ? { ...firstEvent, forecast: getMockForecast() }
+        : firstEvent;
+      setSelectedEvent(firstWithForecast);
     }
+    // Do NOT fetch APIs when toggling Live mode.
+    // liveData was already populated on initial page load (from cache or fresh API).
+    // Only a full page refresh triggers new API calls.
   };
 
   // Default to first historical event if nothing selected
   if (!selectedEvent && HISTORICAL_EVENTS.length > 0) {
-    const firstEvent = HISTORICAL_EVENTS[0] as any;
+    const firstEvent = HISTORICAL_EVENTS[0];
     const firstWithForecast = firstEvent._meta
       ? { ...firstEvent, forecast: getMockForecast() }
       : firstEvent;
@@ -203,6 +220,14 @@ export default function Home() {
 
   return (
     <div style={{minHeight: '900px', display: 'flex', flexDirection: 'column', background: '#F3F3F1', fontFamily: 'Inter,system-ui,sans-serif', color: '#1A1A1A'}}>
+      {/* Skip to content */}
+      <a
+        href="#main-content"
+        className="skip-link"
+      >
+        Skip to main content
+      </a>
+
       {/* Header */}
       <header style={{minHeight: '56px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', padding: '6px 20px', borderBottom: '1px solid #BDBDB8', background: '#fff'}}>
         {/* Left: Logo + Mode buttons (left-aligned) */}
@@ -212,7 +237,7 @@ export default function Home() {
               <circle cx="14" cy="14" r="5"/>
               <path d="M14 2v4M14 22v4M2 14h4M22 14h4M5.5 5.5l2.8 2.8M19.7 19.7l2.8 2.8M5.5 22.5l2.8-2.8M19.7 8.3l2.8-2.8"/>
             </svg>
-            <strong style={{fontSize: '16px'}}>Solar Jukebox</strong>
+            <strong style={{fontSize: '16px'}}>Heliophon</strong>
           </div>
           <div className="row">
             <button className={clsx('btn', isLiveMode ? 'on' : '')} aria-pressed={isLiveMode} onClick={handleToggleLiveMode}>
@@ -281,12 +306,68 @@ export default function Home() {
 
       {/* Alert Banner */}
       {selectedEvent.isBlackoutRisk && (
-        <div role="alert" aria-live="assertive" style={{margin: '8px 16px 0', padding: '8px 12px', border: '1px dashed #B42318', borderRadius: '4px', background: '#fff', color: '#B42318', fontSize: '13px'}}>
-          ⚠ Alert banner — appears only for G3+ watches · Geomagnetic storm watch in effect
+        <div
+          role="alert"
+          aria-live="assertive"
+          style={{
+            margin: '8px 16px 0',
+            padding: '8px 16px',
+            border: '2px solid #B42318',
+            borderRadius: '4px',
+            background: '#fff',
+            color: '#B42318',
+            fontSize: '13px',
+            position: 'relative',
+            display: 'inline-block',
+            textAlign: 'center',
+            boxShadow: '0 0 12px rgba(180, 35, 24, 0.5), 0 0 24px rgba(180, 35, 24, 0.3)',
+          }}
+          onMouseEnter={(e) => {
+            const tooltip = (e.currentTarget as HTMLElement).querySelector('[data-tooltip]') as HTMLElement | null;
+            if (tooltip) {
+              tooltip.style.opacity = '1';
+              tooltip.style.visibility = 'visible';
+              tooltip.style.transform = 'translateY(0)';
+            }
+          }}
+          onMouseLeave={(e) => {
+            const tooltip = (e.currentTarget as HTMLElement).querySelector('[data-tooltip]') as HTMLElement | null;
+            if (tooltip) {
+              tooltip.style.opacity = '0';
+              tooltip.style.visibility = 'hidden';
+              tooltip.style.transform = 'translateY(-4px)';
+            }
+          }}
+        >
+          <span style={{fontWeight: 600, animation: 'pulse-red 0.8s ease-in-out infinite'}}>Alert banner — Geomagnetic storm watch in effect!</span>
+          <div
+            data-tooltip
+            style={{
+              position: 'absolute',
+              top: 'calc(100% + 8px)',
+              left: 0,
+              padding: '6px 10px',
+              background: '#1A1A1A',
+              color: '#fff',
+              fontSize: '11px',
+              borderRadius: '4px',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+              whiteSpace: 'nowrap',
+              opacity: 0,
+              visibility: 'hidden',
+              transform: 'translateY(4px)',
+              transition: 'opacity 0.2s ease, visibility 0.2s ease, transform 0.2s ease',
+              zIndex: 50,
+              pointerEvents: 'auto',
+            }}
+          >
+            Appears only for G3+ watches
+          </div>
         </div>
       )}
 
       {/* Main Layout - 3 columns */}
+      <main id="main-content" style={{display: 'flex', flexDirection: 'column', minHeight: 0}}>
       <div className="main" style={{gap: 0, marginTop: '8px'}}>
         {/* Left Sidebar - Event Selector */}
         <aside aria-label="Event selector" style={{borderRight: '1px solid #BDBDB8', borderTop: '1px solid #BDBDB8', background: '#fff', display: 'flex', flexDirection: 'column', minHeight: 0}}>
@@ -308,7 +389,99 @@ export default function Home() {
             <input type="search" aria-label="Search events" placeholder="Search events" className="btn" style={{width: '100%', padding: '0 10px'}} />
           </div>
           <div style={{overflow: 'auto', padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: '8px', flex: 1}}>
-            <p className="h">Live feed</p>
+            <div className="row sp" style={{width: '100%'}}>
+              <p className="h">Live feed</p>
+              {/* Refresh button with hover tooltip */}
+              <div
+                style={{
+                  position: 'relative',
+                  display: 'inline-block',
+                }}
+                onMouseEnter={(e) => {
+                  const tooltip = (e.currentTarget as HTMLElement).querySelector('[data-tooltip]') as HTMLElement | null;
+                  if (tooltip) {
+                    tooltip.style.opacity = '1';
+                    tooltip.style.visibility = 'visible';
+                    tooltip.style.transform = 'translateY(0)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  const tooltip = (e.currentTarget as HTMLElement).querySelector('[data-tooltip]') as HTMLElement | null;
+                  if (tooltip) {
+                    tooltip.style.opacity = '0';
+                    tooltip.style.visibility = 'hidden';
+                    tooltip.style.transform = 'translateY(-4px)';
+                  }
+                }}
+              >
+                {showRefreshConfirm ? (
+                <div className="row" style={{gap: '8px', flexWrap: 'wrap', width: '100%'}}>
+                  <span className="muted" style={{fontSize: '11px', flex: 1, minWidth: '200px'}}>
+                    ⚠ This may cause API rate limits!
+                  </span>
+                  <button className="btn" onClick={() => fetchLiveData(true)} disabled={isLoadingLive} style={{minHeight: '36px', padding: '0 12px', fontSize: '12px'}}>
+                    {isLoadingLive ? 'Refreshing...' : 'Yes, refresh'}
+                  </button>
+                  <button className="btn" onClick={() => setShowRefreshConfirm(false)} style={{minHeight: '36px', padding: '0 12px', fontSize: '12px'}}>
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <div
+                  style={{position: 'relative', display: 'inline-block'}}
+                  onMouseEnter={(e) => {
+                    const tooltip = (e.currentTarget as HTMLElement).querySelector('[data-tooltip]') as HTMLElement | null;
+                    if (tooltip) {
+                      tooltip.style.opacity = '1';
+                      tooltip.style.visibility = 'visible';
+                      tooltip.style.transform = 'translateY(0)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    const tooltip = (e.currentTarget as HTMLElement).querySelector('[data-tooltip]') as HTMLElement | null;
+                    if (tooltip) {
+                      tooltip.style.opacity = '0';
+                      tooltip.style.visibility = 'hidden';
+                      tooltip.style.transform = 'translateY(-4px)';
+                    }
+                  }}
+                >
+                  <button
+                    className="btn"
+                    onClick={() => setShowRefreshConfirm(true)}
+                    disabled={isLoadingLive}
+                    aria-label="Refresh live data from APIs (may hit rate limits)"
+                    style={{minHeight: '36px', padding: '0 12px', fontSize: '12px'}}
+                  >
+                    Refresh
+                  </button>
+                  <div
+                    data-tooltip="true"
+                    style={{
+                      position: 'absolute',
+                      top: 'calc(100% + 8px)',
+                      right: 0,
+                      padding: '6px 10px',
+                      background: '#1A1A1A',
+                      color: '#fff',
+                      fontSize: '11px',
+                      borderRadius: '4px',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                      whiteSpace: 'nowrap',
+                      opacity: 0,
+                      visibility: 'hidden',
+                      transform: 'translateY(4px)',
+                      transition: 'opacity 0.2s ease, visibility 0.2s ease, transform 0.2s ease',
+                      zIndex: 50,
+                      pointerEvents: 'auto',
+                    }}
+                  >
+                    Fetches live data from NASA/NOAA APIs (20-min cache). May hit rate limits!
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
             {liveData && !isLoadingLive && (
               <button
                 className={clsx('ev', isLiveMode && selectedEvent?.timestamp === liveData.timestamp ? 'on' : '')}
@@ -321,7 +494,7 @@ export default function Home() {
                 </span>
                 <strong>[Earth-directed CME]</strong>
                 <span className="row">
-                  <span className="tag">G{Math.round((liveData as any).kpIndex || 0)}</span>
+                  <span className="tag">G{Math.round(liveData.kpIndex || 0)}</span>
                   <span className="tag">direct</span>
                 </span>
               </button>
@@ -335,7 +508,7 @@ export default function Home() {
             )}
             <p className="h" style={{marginTop: '8px'}}>Historical library</p>
             {HISTORICAL_EVENTS.map((event) => {
-              const historicalEvent = event as any;
+              const historicalEvent = event;
               const selected = selectedEvent?.timestamp === event.timestamp;
               return (
                 <button
@@ -440,14 +613,14 @@ export default function Home() {
         <aside aria-label="Event details" style={{borderLeft: '1px solid #BDBDB8', borderTop: '1px solid #BDBDB8', background: '#fff', overflow: 'auto', minHeight: 0}}>
           <div className="sec">
             <h2 className="h">Details</h2>
-            <strong style={{fontSize: '18px'}}>{(selectedEvent as any)._meta?.name || (isSimulation ? 'Historical Simulation' : 'Live Space Weather')}</strong>
+            <strong style={{fontSize: '18px'}}>{selectedEvent._meta?.name || (isSimulation ? 'Historical Simulation' : 'Live Space Weather')}</strong>
             <div className="row" style={{flexWrap: 'wrap'}}>
               <span className="tag">CME</span>
               <span className="tag">G{Math.round(selectedEvent.kpIndex)}</span>
-              <span className="tag">{(selectedEvent as any)._meta?.confidence || 'direct'}</span>
+              <span className="tag">{selectedEvent._meta?.confidence || 'direct'}</span>
             </div>
             <span className="muted" style={{fontSize: '12px'}}>
-              {(selectedEvent as any)._meta?.date || (liveData ? `${new Date(liveData.timestamp).toISOString().replace('T', ' ').slice(0, 16)} UTC` : 'Live data')}
+              {selectedEvent._meta?.date || (liveData ? `${new Date(liveData.timestamp).toISOString().replace('T', ' ').slice(0, 16)} UTC` : 'Live data')}
             </span>
             {/* Show live-data degradation banner if any source failed */}
             {selectedEvent._sourceErrors && selectedEvent._sourceErrors.length > 0 && (
@@ -462,7 +635,7 @@ export default function Home() {
               <dt className="muted">Speed</dt><dd>{selectedEvent.cmeSpeed.toLocaleString()} km/s</dd>
               <dt className="muted">Half-angle</dt><dd>{selectedEvent.cmeHalfAngle !== undefined ? `${selectedEvent.cmeHalfAngle}°` : 'N/A'}</dd>
               <dt className="muted">Direction</dt><dd>{selectedEvent.cmeDirection || 'N/A'}</dd>
-              <dt className="muted">Est. arrival</dt><dd>{(selectedEvent as any)._meta?.estimatedArrival || 'N/A'}</dd>
+              <dt className="muted">Est. arrival</dt><dd>{selectedEvent._meta?.estimatedArrival || 'N/A'}</dd>
               <dt className="muted">Earth-directed</dt><dd>{selectedEvent.cmeDirection === 'Earth-directed' ? 'Yes' : 'N/A'}</dd>
             </dl>
           </div>
@@ -495,6 +668,7 @@ export default function Home() {
           </div>
         </aside>
       </div>
+      </main>
 
       {/* Footer - Sonification Player + Credit */}
       <footer className="foot" aria-label="Sonification player" style={{minHeight: '104px', background: '#fff', borderTop: '1px solid #1A1A1A', padding: '8px 16px'}}>
@@ -507,7 +681,7 @@ export default function Home() {
           </div>
           <div style={{minWidth: 0}}>
             <div style={{fontSize: '14px', fontWeight: 600}}>Now sonifying</div>
-            <div className="muted" style={{fontSize: '12px'}}>{(selectedEvent as any)._meta?.name || (isSimulation ? 'Historical Simulation' : 'Live Space Weather')} </div>
+            <div className="muted" style={{fontSize: '12px'}}>{selectedEvent._meta?.name || (isSimulation ? 'Historical Simulation' : 'Live Space Weather')} </div>
           </div>
         </div>
 
@@ -590,8 +764,11 @@ export default function Home() {
           </svg>
           <input type="range" aria-label="Master volume" min="0" max="1" step="0.05" value={volume} onChange={e => setVolume(Number(e.target.value))} style={{width: '110px'}} />
           <span className="muted" style={{fontSize: '12px'}} aria-hidden="true">{Math.round(volume * 100)}%</span>
-          <button className="btn" onClick={() => setShowWhatYoureHearing(!showWhatYoureHearing)}>
-            What you're hearing
+          <Link href="/sonification" className="btn" style={{textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minHeight: '44px'}}>
+            What you&apos;re hearing
+          </Link>
+          <button className="btn" onClick={() => setShowEducationalPanel(true)} aria-label="Quick reference modal">
+            ?
           </button>
           <button className="btn" aria-label="Up next queue" style={{minWidth: '44px'}}>
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#1A1A1A" strokeWidth="1.6" aria-hidden="true">
@@ -615,6 +792,16 @@ export default function Home() {
         isSimulation={isSimulation}
         onAudioReady={() => setIsReady(true)}
       />
+
+      {/* Educational Panel */}
+      {showEducationalPanel && (
+        <EducationalPanel
+          data={selectedEvent}
+          isPlaying={isPlaying}
+          isSimulation={isSimulation}
+          onClose={() => setShowEducationalPanel(false)}
+        />
+      )}
     </div>
   );
 }
