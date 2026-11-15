@@ -1,4 +1,4 @@
-# ☀️ Solar Jukebox
+# ☀️ Heliophon
 
 > **Space weather sonification for NASA Space Apps Challenge 2026**  
 > *The Earth Information Jukebox* — making solar data audible so operators *hear* the storm coming.
