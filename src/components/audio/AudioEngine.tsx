@@ -247,6 +247,10 @@ export function AudioEngine({ data, isPlaying, volume, isSimulation, onAudioRead
     else if (kpIndex >= 6) kpScaleIndex = 3; // G3
     else if (kpIndex >= 5) kpScaleIndex = 2; // G2
     else if (kpIndex >= 4) kpScaleIndex = 1; // G1
+    // Update note based on current Kp scale index
+    if (kpBassRef.current) {
+      kpBassRef.current.setNote(KP_SCALE[kpScaleIndex]);
+    }
     // else 0 = G0 (root)
 
     const kpNote = KP_SCALE[kpScaleIndex];
