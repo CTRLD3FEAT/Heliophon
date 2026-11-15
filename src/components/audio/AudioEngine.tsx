@@ -253,9 +253,7 @@ export function AudioEngine({ data, isPlaying, volume, isSimulation, onAudioRead
     }
     // else 0 = G0 (root)
 
-    const kpNote = KP_SCALE[kpScaleIndex];
-    if (kpBassRef.current) kpBassRef.current.setNote(kpNote);
-    // Subtle harmonic enrichment at higher Kp
+    // Update harmonic richness at higher Kp levels
     if (kpGainRef.current) kpGainRef.current.gain.rampTo(0.1 + kpIndex * 0.015, 1);
 
     // ---- LAYER 2: GOES Lead ----
