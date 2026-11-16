@@ -870,7 +870,8 @@ function drawEarthMagnetosphere(
   }
 }
 
-// Realistic blue-marble Earth for the close-up view
+// Ultra-realistic blue-marble Earth for the close-up view
+// Light comes from the LEFT (the Sun sits on the left edge in this view).
 function drawRealisticEarth(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -879,78 +880,182 @@ function drawRealisticEarth(
   angle: number,
   timestamp: number
 ) {
-  // Atmosphere halo
-  const atmo = ctx.createRadialGradient(x, y, radius * 0.95, x, y, radius * 1.35);
-  atmo.addColorStop(0, 'rgba(120, 180, 255, 0.4)');
-  atmo.addColorStop(0.5, 'rgba(100, 160, 255, 0.16)');
-  atmo.addColorStop(1, 'rgba(100, 160, 255, 0)');
+  const R = radius;
+
+  // ---------- 1. ATMOSPHERE SCATTERING (outside the disc) ----------
+  // Wide Rayleigh halo (deep blue, fades far out)
+  const haloWide = ctx.createRadialGradient(x, y, R * 0.96, x, y, R * 1.55);
+  haloWide.addColorStop(0, 'rgba(80, 130, 240, 0.30)');
+  haloWide.addColorStop(0.35, 'rgba(90, 150, 250, 0.14)');
+  haloWide.addColorStop(1, 'rgba(90, 150, 250, 0)');
   ctx.beginPath();
-  ctx.arc(x, y, radius * 1.35, 0, Math.PI * 2);
-  ctx.fillStyle = atmo;
+  ctx.arc(x, y, R * 1.55, 0, Math.PI * 2);
+  ctx.fillStyle = haloWide;
   ctx.fill();
 
-  // Ocean sphere (light from the left, where the Sun sits in this view)
-  const ocean = ctx.createRadialGradient(
-    x - radius * 0.35, y - radius * 0.35, radius * 0.1,
-    x, y, radius
-  );
-  ocean.addColorStop(0, '#7ec8f7');
-  ocean.addColorStop(0.4, '#2f7fd1');
-  ocean.addColorStop(0.75, '#1a4f9c');
-  ocean.addColorStop(1, '#0d2f66');
+  // Dense scattering layer hugging the limb
+  const haloDense = ctx.createRadialGradient(x, y, R * 0.98, x, y, R * 1.18);
+  haloDense.addColorStop(0, 'rgba(150, 200, 255, 0.42)');
+  haloDense.addColorStop(0.55, 'rgba(110, 170, 255, 0.18)');
+  haloDense.addColorStop(1, 'rgba(110, 170, 255, 0)');
   ctx.beginPath();
-  ctx.arc(x, y, radius, 0, Math.PI * 2);
+  ctx.arc(x, y, R * 1.18, 0, Math.PI * 2);
+  ctx.fillStyle = haloDense;
+  ctx.fill();
+
+  // Forward-scatter warmth on the sun-facing (left) rim
+  const fwdScatter = ctx.createRadialGradient(
+    x - R * 0.92, y, 0,
+    x - R * 0.92, y, R * 0.75
+  );
+  fwdScatter.addColorStop(0, 'rgba(255, 190, 120, 0.28)');
+  fwdScatter.addColorStop(0.5, 'rgba(255, 170, 90, 0.10)');
+  fwdScatter.addColorStop(1, 'rgba(255, 170, 90, 0)');
+  ctx.beginPath();
+  ctx.arc(x - R * 0.92, y, R * 0.75, 0, Math.PI * 2);
+  ctx.fillStyle = fwdScatter;
+  ctx.fill();
+
+  // Bright Rayleigh rim arc on the sunlit side (soft, then crisp)
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.arc(x, y, R * 1.01, Math.PI * 0.62, Math.PI * 1.38);
+  ctx.strokeStyle = 'rgba(180, 215, 255, 0.35)';
+  ctx.lineWidth = R * 0.09;
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(x, y, R * 1.0, Math.PI * 0.68, Math.PI * 1.32);
+  ctx.strokeStyle = 'rgba(220, 240, 255, 0.85)';
+  ctx.lineWidth = R * 0.022;
+  ctx.stroke();
+
+  // ---------- 2. OCEAN ----------
+  const ocean = ctx.createRadialGradient(
+    x - R * 0.35, y - R * 0.35, R * 0.1,
+    x, y, R
+  );
+  ocean.addColorStop(0, '#8ed4fa');
+  ocean.addColorStop(0.35, '#3a8ede');
+  ocean.addColorStop(0.65, '#2067bb');
+  ocean.addColorStop(0.88, '#133f86');
+  ocean.addColorStop(1, '#0a2a5e');
+  ctx.beginPath();
+  ctx.arc(x, y, R, 0, Math.PI * 2);
   ctx.fillStyle = ocean;
   ctx.fill();
 
-  // Continents + ice caps (clipped to the disc, rotating with earth.angle)
+  // ---------- 3. SURFACE (clipped) ----------
   ctx.save();
   ctx.beginPath();
-  ctx.arc(x, y, radius * 0.995, 0, Math.PI * 2);
+  ctx.arc(x, y, R * 0.995, 0, Math.PI * 2);
   ctx.clip();
 
+  const project = (ax: number, ay: number, rot: number, scale = 0.92) => {
+    const ptAngle = Math.atan2(ay, ax) + rot;
+    const dist = Math.sqrt(ax * ax + ay * ay) * R * scale;
+    return {
+      px: x + Math.cos(ptAngle) * dist,
+      py: y + Math.sin(ptAngle) * dist,
+      ux: Math.cos(ptAngle) * Math.sqrt(ax * ax + ay * ay) * scale, // -1 (sun side) .. +1 (night side)
+    };
+  };
+
+  // Detailed continents (unit-disc coordinates, rotating with the surface)
   const continents: Array<Array<{ ax: number; ay: number }>> = [
-    [{ ax: -0.55, ay: -0.35 }, { ax: -0.25, ay: -0.5 }, { ax: 0.05, ay: -0.42 }, { ax: 0.1, ay: -0.15 }, { ax: -0.12, ay: 0.05 }, { ax: -0.42, ay: -0.1 }],   // Americas
-    [{ ax: -0.15, ay: 0.15 }, { ax: 0.05, ay: 0.2 }, { ax: 0.05, ay: 0.62 }, { ax: -0.18, ay: 0.55 }],                                                          // S. America tail
-    [{ ax: 0.25, ay: -0.3 }, { ax: 0.55, ay: -0.42 }, { ax: 0.75, ay: -0.2 }, { ax: 0.6, ay: 0.05 }, { ax: 0.35, ay: 0.0 }],                                     // Africa/Europe
-    [{ ax: 0.5, ay: -0.65 }, { ax: 0.85, ay: -0.6 }, { ax: 0.9, ay: -0.35 }, { ax: 0.65, ay: -0.35 }],                                                           // Asia north
-    [{ ax: 0.35, ay: 0.35 }, { ax: 0.6, ay: 0.3 }, { ax: 0.75, ay: 0.5 }, { ax: 0.5, ay: 0.62 }],                                                               // Australia
+    [ // North America
+      { ax: -0.72, ay: -0.18 }, { ax: -0.62, ay: -0.34 }, { ax: -0.44, ay: -0.46 },
+      { ax: -0.24, ay: -0.52 }, { ax: -0.02, ay: -0.46 }, { ax: 0.06, ay: -0.32 },
+      { ax: -0.04, ay: -0.18 }, { ax: -0.10, ay: 0.02 }, { ax: -0.22, ay: 0.10 },
+      { ax: -0.40, ay: 0.06 }, { ax: -0.58, ay: -0.02 },
+    ],
+    [ // Central America bridge
+      { ax: -0.18, ay: 0.10 }, { ax: -0.06, ay: 0.14 }, { ax: -0.02, ay: 0.24 },
+      { ax: -0.12, ay: 0.26 },
+    ],
+    [ // South America
+      { ax: -0.10, ay: 0.28 }, { ax: 0.06, ay: 0.30 }, { ax: 0.10, ay: 0.46 },
+      { ax: 0.04, ay: 0.64 }, { ax: -0.06, ay: 0.74 }, { ax: -0.14, ay: 0.62 },
+      { ax: -0.16, ay: 0.44 },
+    ],
+    [ // Greenland
+      { ax: -0.30, ay: -0.72 }, { ax: -0.12, ay: -0.80 }, { ax: 0.04, ay: -0.74 },
+      { ax: -0.04, ay: -0.64 }, { ax: -0.22, ay: -0.62 },
+    ],
+    [ // Europe
+      { ax: 0.30, ay: -0.52 }, { ax: 0.46, ay: -0.58 }, { ax: 0.58, ay: -0.48 },
+      { ax: 0.54, ay: -0.36 }, { ax: 0.40, ay: -0.36 }, { ax: 0.32, ay: -0.42 },
+    ],
+    [ // Africa
+      { ax: 0.34, ay: -0.30 }, { ax: 0.52, ay: -0.28 }, { ax: 0.62, ay: -0.14 },
+      { ax: 0.60, ay: 0.06 }, { ax: 0.52, ay: 0.24 }, { ax: 0.42, ay: 0.34 },
+      { ax: 0.34, ay: 0.24 }, { ax: 0.30, ay: 0.06 }, { ax: 0.26, ay: -0.12 },
+    ],
+    [ // Asia
+      { ax: 0.44, ay: -0.60 }, { ax: 0.66, ay: -0.68 }, { ax: 0.86, ay: -0.60 },
+      { ax: 0.94, ay: -0.42 }, { ax: 0.86, ay: -0.24 }, { ax: 0.70, ay: -0.16 },
+      { ax: 0.58, ay: -0.30 }, { ax: 0.50, ay: -0.44 },
+    ],
+    [ // India
+      { ax: 0.68, ay: -0.10 }, { ax: 0.78, ay: -0.14 }, { ax: 0.74, ay: 0.06 },
+      { ax: 0.66, ay: 0.10 },
+    ],
+    [ // SE Asia archipelago
+      { ax: 0.78, ay: 0.22 }, { ax: 0.88, ay: 0.26 }, { ax: 0.84, ay: 0.36 },
+      { ax: 0.76, ay: 0.32 },
+    ],
+    [ // Australia
+      { ax: 0.58, ay: 0.46 }, { ax: 0.74, ay: 0.42 }, { ax: 0.80, ay: 0.56 },
+      { ax: 0.68, ay: 0.64 }, { ax: 0.56, ay: 0.58 },
+    ],
   ];
 
   continents.forEach(continent => {
     ctx.beginPath();
     continent.forEach((pt, i) => {
-      const ptAngle = Math.atan2(pt.ay, pt.ax) + angle;
-      const dist = Math.sqrt(pt.ax * pt.ax + pt.ay * pt.ay) * radius * 0.92;
-      const px = x + Math.cos(ptAngle) * dist;
-      const py = y + Math.sin(ptAngle) * dist;
-      if (i === 0) ctx.moveTo(px, py);
-      else ctx.lineTo(px, py);
+      const p = project(pt.ax, pt.ay, angle);
+      if (i === 0) ctx.moveTo(p.px, p.py);
+      else ctx.lineTo(p.px, p.py);
     });
     ctx.closePath();
-    const land = ctx.createLinearGradient(x - radius, y - radius, x + radius, y + radius);
-    land.addColorStop(0, '#3d8b40');
-    land.addColorStop(0.5, '#2e7d32');
-    land.addColorStop(1, '#1f5e20');
+    // Two-tone land: warm green sunlit face -> deep olive night face
+    const land = ctx.createLinearGradient(x - R, y, x + R, y);
+    land.addColorStop(0, '#4d9448');
+    land.addColorStop(0.45, '#357c35');
+    land.addColorStop(0.75, '#27592a');
+    land.addColorStop(1, '#183519');
     ctx.fillStyle = land;
     ctx.fill();
-    ctx.strokeStyle = 'rgba(20, 60, 20, 0.35)';
-    ctx.lineWidth = Math.max(1, radius * 0.012);
+    ctx.strokeStyle = 'rgba(16, 50, 24, 0.5)';
+    ctx.lineWidth = Math.max(1, R * 0.01);
     ctx.stroke();
   });
 
-  // Polar ice caps — subtle white hugging the poles
-  ctx.globalAlpha = 0.45;
+  // Desert belt highlights on sunlit land (Sahara / Australia tone)
+  ctx.globalAlpha = 0.5;
+  [{ ax: 0.46, ay: -0.08, r: 0.13 }, { ax: 0.68, ay: 0.52, r: 0.09 }].forEach(d => {
+    const p = project(d.ax, d.ay, angle);
+    const g = ctx.createRadialGradient(p.px, p.py, 0, p.px, p.py, d.r * R);
+    g.addColorStop(0, 'rgba(212, 178, 106, 0.75)');
+    g.addColorStop(1, 'rgba(212, 178, 106, 0)');
+    ctx.beginPath();
+    ctx.arc(p.px, p.py, d.r * R, 0, Math.PI * 2);
+    ctx.fillStyle = g;
+    ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+
+  // Polar ice caps — soft white hugging the poles
+  ctx.globalAlpha = 0.3;
   ctx.fillStyle = '#f4f9ff';
   ctx.beginPath();
-  ctx.ellipse(x, y - radius * 0.88, radius * 0.22, radius * 0.07, 0, 0, Math.PI * 2);
+  ctx.ellipse(x, y - R * 0.9, R * 0.18, R * 0.05, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.beginPath();
-  ctx.ellipse(x, y + radius * 0.9, radius * 0.26, radius * 0.07, 0, 0, Math.PI * 2);
+  ctx.ellipse(x, y + R * 0.92, R * 0.2, R * 0.05, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.globalAlpha = 1;
 
-  // Clouds — translucent white swirls drifting slightly faster than the surface
+  // Clouds — translucent swirls drifting slightly faster than the surface
   const cloudDrift = angle * 1.35 + timestamp * 0.00012;
   const clouds = [
     { ax: -0.5, ay: -0.25, r: 0.22 },
@@ -960,66 +1065,122 @@ function drawRealisticEarth(
     { ax: -0.35, ay: 0.35, r: 0.24 },
     { ax: 0.55, ay: 0.35, r: 0.2 },
     { ax: 0.7, ay: -0.45, r: 0.16 },
+    { ax: -0.62, ay: -0.6, r: 0.18 },
   ];
   clouds.forEach(cloud => {
     const cAngle = Math.atan2(cloud.ay, cloud.ax) + cloudDrift;
-    const dist = Math.sqrt(cloud.ax * cloud.ax + cloud.ay * cloud.ay) * radius * 0.9;
+    const dist = Math.sqrt(cloud.ax * cloud.ax + cloud.ay * cloud.ay) * R * 0.9;
     const px = x + Math.cos(cAngle) * dist;
     const py = y + Math.sin(cAngle) * dist;
-    const cloudGrad = ctx.createRadialGradient(px, py, 0, px, py, cloud.r * radius);
+    const cloudGrad = ctx.createRadialGradient(px, py, 0, px, py, cloud.r * R);
     cloudGrad.addColorStop(0, 'rgba(255, 255, 255, 0.55)');
     cloudGrad.addColorStop(0.6, 'rgba(255, 255, 255, 0.28)');
     cloudGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
     ctx.beginPath();
-    ctx.arc(px, py, cloud.r * radius, 0, Math.PI * 2);
+    ctx.arc(px, py, cloud.r * R, 0, Math.PI * 2);
     ctx.fillStyle = cloudGrad;
     ctx.fill();
   });
 
-  ctx.restore();
-
-  // Terminator (night side, away from the Sun on the right)
+  // ---------- 4. NIGHT SHADING ----------
   const night = ctx.createRadialGradient(
-    x + radius * 0.55, y, radius * 0.2,
-    x, y, radius
+    x + R * 0.62, y, R * 0.25,
+    x, y, R
   );
-  night.addColorStop(0, 'rgba(0, 0, 10, 0.55)');
-  night.addColorStop(0.4, 'rgba(0, 0, 10, 0.3)');
-  night.addColorStop(1, 'rgba(0, 0, 10, 0)');
+  night.addColorStop(0, 'rgba(2, 3, 14, 0.72)');
+  night.addColorStop(0.45, 'rgba(2, 3, 14, 0.4)');
+  night.addColorStop(1, 'rgba(2, 3, 14, 0)');
   ctx.beginPath();
-  ctx.arc(x, y, radius, 0, Math.PI * 2);
+  ctx.arc(x, y, R, 0, Math.PI * 2);
   ctx.fillStyle = night;
   ctx.fill();
 
-  // Specular ocean glint on the sunlit side
-  const glint = ctx.createRadialGradient(
-    x - radius * 0.45, y - radius * 0.4, 0,
-    x - radius * 0.45, y - radius * 0.4, radius * 0.35
-  );
-  glint.addColorStop(0, 'rgba(255, 255, 255, 0.35)');
-  glint.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  // ---------- 5. CITY LIGHTS (night side only) ----------
+  const cities: Array<{ ax: number; ay: number; n: number }> = [
+    { ax: -0.30, ay: 0.02, n: 5 },   // US east coast
+    { ax: -0.52, ay: -0.14, n: 4 },  // US west coast
+    { ax: -0.06, ay: 0.48, n: 4 },   // Brazil
+    { ax: 0.38, ay: -0.42, n: 5 },   // Europe
+    { ax: 0.52, ay: -0.16, n: 3 },   // Nile / Middle East
+    { ax: 0.70, ay: -0.02, n: 5 },   // India
+    { ax: 0.84, ay: -0.30, n: 4 },   // East Asia
+    { ax: 0.70, ay: 0.54, n: 3 },    // Australia
+  ];
+  cities.forEach((city, ci) => {
+    for (let i = 0; i < city.n; i++) {
+      // Deterministic jitter (stable across frames — no flicker)
+      const seed = Math.sin(i * 127.1 + ci * 311.7) * 43758.5453;
+      const frac = seed - Math.floor(seed);
+      const seed2 = Math.sin(i * 269.5 + ci * 183.3) * 24634.6345;
+      const frac2 = seed2 - Math.floor(seed2);
+      const jx = city.ax + (frac - 0.5) * 0.1;
+      const jy = city.ay + (frac2 - 0.5) * 0.12;
+      const p = project(jx, jy, angle);
+      // Darkness factor: -1 = fully lit, +1 = full night
+      const dark = Math.max(0, Math.min(1, (p.ux + 0.25) / 0.85));
+      if (dark < 0.25) continue;
+      const a = dark * 0.9;
+      const rr = R * 0.012;
+      // warm glow
+      const glow = ctx.createRadialGradient(p.px, p.py, 0, p.px, p.py, rr * 3);
+      glow.addColorStop(0, `rgba(255, 214, 130, ${a * 0.5})`);
+      glow.addColorStop(1, 'rgba(255, 214, 130, 0)');
+      ctx.beginPath();
+      ctx.arc(p.px, p.py, rr * 3, 0, Math.PI * 2);
+      ctx.fillStyle = glow;
+      ctx.fill();
+      // core dot
+      ctx.beginPath();
+      ctx.arc(p.px, p.py, rr, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255, 226, 160, ${a})`;
+      ctx.fill();
+    }
+  });
+
+  // ---------- 6. TWILIGHT GLOW (warm band at the terminator) ----------
+  const twilight = ctx.createLinearGradient(x - R, 0, x + R, 0);
+  twilight.addColorStop(0, 'rgba(255, 150, 60, 0)');
+  twilight.addColorStop(0.28, 'rgba(255, 165, 70, 0.10)');
+  twilight.addColorStop(0.44, 'rgba(255, 140, 50, 0.28)');
+  twilight.addColorStop(0.58, 'rgba(255, 110, 40, 0.16)');
+  twilight.addColorStop(0.78, 'rgba(255, 110, 40, 0)');
   ctx.beginPath();
-  ctx.arc(x, y, radius * 0.99, 0, Math.PI * 2);
-  ctx.save();
-  ctx.beginPath();
-  ctx.arc(x, y, radius * 0.99, 0, Math.PI * 2);
-  ctx.clip();
-  ctx.fillStyle = glint;
-  ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+  ctx.arc(x, y, R, 0, Math.PI * 2);
+  ctx.fillStyle = twilight;
+  ctx.fill();
+
   ctx.restore();
 
-  // Sunlit rim light on the left edge
+  // ---------- 7. SUNLIT HIGHLIGHTS ----------
+  // Specular ocean glint on the sunlit side
+  const glint = ctx.createRadialGradient(
+    x - R * 0.45, y - R * 0.4, 0,
+    x - R * 0.45, y - R * 0.4, R * 0.35
+  );
+  glint.addColorStop(0, 'rgba(255, 255, 255, 0.4)');
+  glint.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  ctx.save();
   ctx.beginPath();
-  ctx.arc(x, y, radius * 0.99, Math.PI * 0.6, Math.PI * 1.4);
-  ctx.strokeStyle = 'rgba(190, 225, 255, 0.7)';
-  ctx.lineWidth = Math.max(1.5, radius * 0.03);
-  ctx.stroke();
+  ctx.arc(x, y, R * 0.99, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.fillStyle = glint;
+  ctx.fillRect(x - R, y - R, R * 2, R * 2);
+  ctx.restore();
+
+  // Inner limb haze (atmosphere seen from orbit, above the surface)
+  const haze = ctx.createRadialGradient(x, y, R * 0.82, x, y, R);
+  haze.addColorStop(0, 'rgba(140, 195, 255, 0)');
+  haze.addColorStop(1, 'rgba(140, 195, 255, 0.22)');
+  ctx.beginPath();
+  ctx.arc(x, y, R, 0, Math.PI * 2);
+  ctx.fillStyle = haze;
+  ctx.fill();
 
   // Crisp outline
   ctx.beginPath();
-  ctx.arc(x, y, radius, 0, Math.PI * 2);
+  ctx.arc(x, y, R, 0, Math.PI * 2);
   ctx.strokeStyle = 'rgba(10, 30, 60, 0.6)';
-  ctx.lineWidth = Math.max(1, radius * 0.012);
+  ctx.lineWidth = Math.max(1, R * 0.012);
   ctx.stroke();
 }
 
