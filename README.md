@@ -1,7 +1,9 @@
 # ☀️ Heliophon
 
-> **Space weather sonification for NASA Space Apps Challenge 2026**  
-> *The Earth Information Jukebox* — making solar data audible so operators *hear* the storm coming.
+> **"We believe in accessibility & simplicity"**
+>
+> Most space-weather warnings live in dashboards, JSON feeds, and specialist charts.
+> Heliophon turns them into a **soundscape you can trust with your eyes closed**.
 
 [![NASA Space Apps 2026](https://img.shields.io/badge/NASA%20Space%20Apps-2026-0B3D91?logo=nasa&logoColor=white)](https://www.spaceappschallenge.org/)
 [![Next.js](https://img.shields.io/badge/Next.js-15-000000?logo=next.js&logoColor=white)](https://nextjs.org/)
@@ -10,76 +12,130 @@
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-4-06B6D4?logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
----
-
-## 🌌 The Problem
-
-Space weather storms — **CMEs, flares, geomagnetic storms** — threaten power grids, satellites, GPS, aviation comms, and pipelines. NOAA SWPC issues text-table alerts. Operators must *read* them while doing other tasks.
-
-**Solar Jukebox** makes space weather **audible** — a continuous sonic representation of live solar wind, flares, CMEs, and geomagnetic response. Listen while you work; hear the storm coming.
+**Heliophon** (Greek: *helios* = sun, *phonē* = sound) sonifies live NASA DONKI + NOAA SWPC
+data into a continuous, perceptually-designed soundscape — so grid, satellite, GPS, and
+aviation operators can **hear the storm coming** while their eyes are busy.
 
 ---
 
-## 🎵 Sonification Design
+## ⚡ The Problem
 
-### Continuous Layers (5-layer FM Sonification)
+Space weather — solar flares, CMEs, geomagnetic storms — can **collapse power grids,
+disable GPS, drag satellites from orbit, and black out aviation comms**.
 
-| Layer | What It Maps To | Sound Character |
-|-------|----------------|-----------------|
-| **Kp Bass Pad** | Kp-index 0–9 | Subby FM pad (C2 root), modulation index 0→10, lowpass 120→2000 Hz |
-| **GOES Lead Synth** | X-ray flare class (A–X) | Dual FM voices (C4 + G4 5th), FM index scales to X-flare brightness |
-| **Dst Sub-Bass** | Dst index (nT) | Ultra-low rumble (15–30 Hz), amplitude tracks |Dst| storm depth |
-| **CME Arpeggiator** | CME speed (km/s) | Sleek FM minor 9th arp, rate 0.2→4 Hz, lowpass 1.5→5 kHz |
-| **Solar Wind Texture** | Proton flux (pfu) | Filtered brown noise density & color |
+But today's warnings must be **watched**. In a crisis, eyes are busy. **Ears are free.**
 
-### Event-Triggered Alerts (threshold-cross)
-
-| Alert | Trigger | Sound | Impact |
-|-------|---------|-------|--------|
-| **Grid Blackout** | G3+ (Kp ≥ 7) | Deep minor chord | Transformer GIC damage |
-| **GPS Disruption** | G2+ (Kp ≥ 6) or M/X | Glitchy trills C7→C8 | Ionospheric scintillation |
-| **Satellite Drag** | G2+ (Kp ≥ 6) | Descending glide | Thermospheric expansion |
-| **Radiation Risk** | X-flare or CME >1500 | Brown noise bursts | SEP hazard |
-| **Comms Blackout** | M/X flare | Stuttering square A5 | HF radio loss |
-
-> **Design principle**: Each stream owns a distinct sonic dimension (pitch, timbre, rhythm, texture, sub-bass). The brain separates them effortlessly — you hear all five simultaneously without cognitive overload.
-
-- **Kp Bass** maps to storm energy (fixed C2 root, FM harmonics).
-- **GOES Lead** brightness maps to X-ray flare class (dual FM voices).
-- **Dst Sub-Bass** amplitude maps to |Dst| storm depth.
-- **CME Arp** rate maps to CME speed (sleek minor 9th pattern).
-- **Solar Wind** density maps to proton flux.
-- Alerts fire once per threshold cross (debounced).
-
----
-
-## 🪐 Cosmic Visualization
-
-### Canvas Layers (back → front)
-
-```mermaid
-flowchart LR
-    BG[Background] --> Orbits --> Parker --> Sun --> Planets --> CME --> SW --> CMEP --> Mag --> Earth[Earth]
+```
+   TODAY'S PIPELINE                      HELIOPHON'S PIPELINE
+ ┌──────────────────────┐            ┌──────────────────────────────┐
+ │  NASA DONKI (CMEs)   │            │  NASA DONKI (CMEs)           │
+ │  NOAA SWPC (Kp, Dst) │            │  NOAA SWPC (Kp, Dst, GOES)   │
+ │  GOES X-ray flux     │            └──────────────┬───────────────┘
+ └──────────┬───────────┘                           │
+            ▼                                       ▼
+ ┌──────────────────────┐            ┌──────────────────────────────┐
+ │  JSON tables & charts│            │  Sonification engine (Tone.js)│
+ │  operator must WATCH │            │  5 layers + 5 alerts = HEAR it│
+ └──────────────────────┘            └──────────────────────────────┘
 ```
 
-| Layer | Description |
-|-------|-------------|
-| **Orbits** | 4 planets at actual AU distances (Mercury 0.39, Venus 0.72, Earth 1.00, Mars 1.52) |
-| **Parker Spiral** | 8 rotating magnetic field lines, solar-wind driven |
-| **Sun** | Radial gradient: white core → orange photosphere → red corona; pulses + blue corona on storm |
-| **Planets** | Realistic size/color/distance; dynamic labels follow orbit |
-| **CME Cone** | Blue transparent cone with physics-based arrival ETA label |
-| **Solar Wind** | 80 blue particles deflected by magnetosphere |
-| **CME Particles** | Orange bursts triggered at cone front |
-| **Magnetosphere** | Multi-layer glow, magnetopause, bow shock, 4-color aurora ovals |
-| **Earth** | Gradient sphere + continents, night-side terminator |
+---
 
-### Physics-Based CME Arrival Time
+## 🌟 The Wow Factors
+
+### 1. Sound *is* the interface — five continuous layers
+
+No melody to learn, no training required. Each data stream owns one **distinct sonic
+dimension** on its own frequency band, so the brain separates them effortlessly:
+
+```
+ FREQUENCY
+   ▲
+   │  ♦ CME Siren (C5↔C6) ......... two-tone square = universal emergency siren
+   │  ♦ GOES Lead (C4+G3) ......... dissonant dual-osc, brighter = bigger flare
+   │  ♦ Kp Bass (C2 FM) ........... more harmonics = more geomagnetic tension
+   │  ♦ Dst Sub-Bass (15–30 Hz) ... felt in the chest, not heard
+   │  ♦ Solar Wind (brown noise) .. denser = heavier particle storm
+   ▼
+   └──────────────────────────────────────────────────────────────▶ TIME
+```
+
+| Layer | Data | Sound |
+|-------|------|-------|
+| **Kp Bass** | Kp-index 0–9 | C2 FM drone — modulation index rises with Kp |
+| **GOES Lead** | Flare class A–X | Dissonant dual-osc (C4 + G3), brighter = more dangerous |
+| **Dst Sub-Bass** | Ring current (nT) | 15–30 Hz rumble, amplitude = storm depth |
+| **CME Siren** | CME speed (km/s) | Two-tone C5↔C6 square wave |
+| **Solar Wind** | Proton flux (pfu) | Filtered brown noise, density = particle storm |
+
+### 2. Alerts you already understand
+
+Five threshold-triggered alerts (debounced — fire once per threshold cross):
+
+```
+        Kp rises ──────────────▶ 7 ───▶ 🔊 Grid Blackout  (deep minor chord)
+        Kp rises ──────────────▶ 6 ───▶ 🔊 GPS + Satellite alerts
+        Flare class ───────────▶ M/X ─▶ 🔊 Comms Blackout  (stuttering square)
+        CME speed ─────────────▶ 1500 ▶ 🔊 Radiation Risk  (3 noise bursts)
+```
+
+> A siren means **"move."** A descending glide means **"falling."** A minor chord means
+> **"bad."** The sound *is* the meaning — no legend memorisation needed.
+
+### 3. A cosmic view that matches what you hear
+
+A live canvas wireframe of the solar system — orbits at true AU distances, Parker-spiral
+magnetic field lines, a physics-driven CME cone with **real arrival ETA**, magnetosphere,
+bow shock and aurora ovals that compress as the storm hits.
+
+Switch to **Earth close-up** and a big, realistic blue-marble Earth fills the view:
+ocean depth gradients, rotating continents, drifting clouds, polar ice, atmospheric
+halo, and a day/night terminator aligned with the Sun.
+
+```
+        ☀️ Sun                    🌍 Earth
+      (left)              ┌─────────────────┐
+       \                  │  ☁️ clouds      │
+        \  ── solar wind ─▶│  🏔 continents  │──▶ magnetosphere,
+         \                 │  🧊 ice caps    │    bow shock, aurora
+                           │  🌗 terminator  │
+                           └─────────────────┘
+```
+
+### 4. Honest live + simulation dual mode
+
+- **Live**: real NOAA/NASA data, 20-min cache, manual refresh (rate-limit safe)
+- **Simulation**: five documented historical storms replayed through the *identical*
+  engine — Carrington 1859, Quebec 1989, Halloween 2003, May 2024, Oct 2024
+- Every event carries a **confidence label** (`direct` / `partial` / `historical`) —
+  we tell you exactly how trustworthy each data point is. No magic numbers, no
+  fake-precision claims.
+
+### 5. Works offline, stays honest
+
+First load caches data in `localStorage` (20 min). When the API is unreachable the app
+keeps working and **shows a "cached data" badge** with the cache age — never pretending
+to be live.
+
+### 6. Physics, not decoration
+
+CME arrival time is computed, not faked:
 
 ```
 Distance = 1 AU = 149,600,000 km
-Time (hours) = Distance / CME_Speed / 3600
+ETA (hours) = Distance / CME_Speed / 3600
 ```
+
+A 1,850 km/s Halloween-class CME shows ≈ **22.5 h to Earth** on the cone label.
+
+### 7. Accessibility first, by design
+
+- `prefers-reduced-motion` → animations pause, **audio keeps you informed**
+- Skip-to-content link, `<main>` landmark, `role="alert" aria-live="assertive"` banner
+- All controls keyboard-navigable with `:focus-visible` outlines and ARIA labels
+- WCAG AA contrast throughout
+- Screen-reader-friendly sonification guide at **`/sonification`**
+  (3 tabs: Layers / Alerts / Principles)
 
 ---
 
@@ -89,13 +145,14 @@ Five documented storms for guaranteed offline demo:
 
 | Event | Date | CME | Flare | Kp | Dst | Confidence |
 |-------|------|-----|-------|----|-----|------------|
-| Carrington 1859 | 1–2 Sep 1859 | ~2,000 km/s | X45* | 9 | −1,600 nT | Reconstruction |
-| Quebec 1989 | 13 Mar 1989 | 2,000 km/s | X15 | 9 | −589 nT | Direct |
-| Halloween 2003 | 28 Oct–4 Nov 2003 | 1,850 km/s | X17.2 | 9 | −383 nT | Direct |
-| May 2024 Superstorm | 10–11 May 2024 | 800 km/s | X5.8 | 8 | −412 nT | Direct |
-| October 2024 Storm | 10–11 Oct 2024 | 1,100 km/s | X9.0 | 8 | −518 nT | Direct |
+| Carrington 1859 | 1–2 Sep 1859 | ~2,000 km/s | X45* | 9 | −1,600 nT | historical |
+| Quebec 1989 | 13 Mar 1989 | 2,000 km/s | X15 | 9 | −589 nT | partial |
+| Halloween 2003 | 28 Oct–4 Nov 2003 | 1,850 km/s | X17.2 | 9 | −383 nT | direct |
+| May 2024 Superstorm | 10–11 May 2024 | 800 km/s | X5.8 | 8 | −412 nT | direct |
+| October 2024 Storm | 10–11 Oct 2024 | 1,100 km/s | X9.0 | 8 | −518 nT | direct |
 
-> *Carrington flare class estimated; Dst from ice-core proxies.
+> *Carrington flare class estimated; Dst from ice-core proxies — labelled `historical`
+> in-app rather than passing reconstruction off as measurement.
 
 ---
 
@@ -103,31 +160,35 @@ Five documented storms for guaranteed offline demo:
 
 ```bash
 # Clone & install
-git clone https://github.com/CTRLD3FEAT/Solar-Jukebox.git
-cd Solar-Jukebox && npm install
+git clone https://github.com/CTRLD3FEAT/Heliophon.git
+cd Heliophon && npm install
 
-# Optional: NASA API key for DONKI (NOAA endpoints work without)
+# Optional: NASA API key for DONKI CME data (NOAA endpoints work without)
 echo "NEXT_PUBLIC_NASA_API_KEY=your_key" > .env.local
 
 # Run
 npm run dev  # http://localhost:3000
 ```
 
-**Deploy**: Push to `main` → Vercel auto-deploys. Add `NEXT_PUBLIC_NASA_API_KEY` in Vercel settings.
+**Deploy**: push to `main` → Vercel auto-deploys. Add `NEXT_PUBLIC_NASA_API_KEY` in
+Vercel settings.
 
-▶ **Play Space Weather** (requires user gesture)  
-📂 **Select historical storm** in sidebar for offline replay
+▶ **Play Space Weather** (requires one user gesture to start audio)
+📂 **Select a historical storm** in the sidebar for offline replay
+📖 **"What you're hearing"** opens the `/sonification` guide
 
 ---
 
 ## 📡 Data Sources
 
-| Source | Endpoint | Data | Rate Limit | Cache |
-|--------|----------|------|------------|-------|
-| **NASA DONKI** | `/DONKI/CME` | CME speed, half-angle, direction, AR | 1,000 req/hr/key | 20 min localStorage |
-| **NOAA SWPC** | `/planetary_k_index_1m.json` | Kp-index (1-min) | CloudFront 60s | 20 min |
-| **NOAA GOES** | `/goes/primary/xrays-6-hour.json` | X-ray flux 0.1–0.8 nm | Public | 20 min |
-| **Kyoto WDC** | `/dst_final/YYYYMM/` | Dst index (1-hr) | Public | 20 min |
+| Source | What it gives | Endpoint | Docs |
+|--------|--------------|----------|------|
+| **NASA DONKI** | CME speed, half-angle, direction, active region | `https://api.nasa.gov/DONKI/CME?startDate=…&endDate=…` (API key) | [kauai.ccmc.gsfc.nasa.gov/DONKI](https://kauai.ccmc.gsfc.nasa.gov/DONKI/) · [api.nasa.gov](https://api.nasa.gov/) |
+| **NOAA GOES X-ray flux** | Flare class A–X (0.1–0.8 nm, 6 h) | [services.swpc.noaa.gov/json/goes/primary/xrays-6-hour.json](https://services.swpc.noaa.gov/json/goes/primary/xrays-6-hour.json) | [GOES X-ray flux product](https://www.swpc.noaa.gov/products/goes-x-ray-flux) |
+| **NOAA Planetary Kp (observed)** | Kp-index 0–9 | [services.swpc.noaa.gov/products/noaa-planetary-k-index.json](https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json) | [Planetary K-index](https://www.swpc.noaa.gov/products/planetary-k-index) |
+| **NOAA Planetary Kp (3-day forecast)** | Forecast Kp | [services.swpc.noaa.gov/products/noaa-planetary-k-index-forecast.json](https://services.swpc.noaa.gov/products/noaa-planetary-k-index-forecast.json) | [Kp forecast](https://www.swpc.noaa.gov/products/planetary-k-index-forecast) |
+| **Kyoto WDC Dst (NOAA mirror)** | Dst ring-current index (nT) | [services.swpc.noaa.gov/products/kyoto-dst.json](https://services.swpc.noaa.gov/products/kyoto-dst.json) | Produced by [Kyoto WDCG](http://wdc.kugi.kyoto-u.ac.jp/dst_realtime/presentmonth/index.html) |
+| **NOAA Solar–Geophysical Event summary** | Flare/probability forecast | [services.swpc.noaa.gov/products/solar-geophysical-event.json](https://services.swpc.noaa.gov/products/solar-geophysical-event.json) | [SWPC products](https://www.swpc.noaa.gov/products) |
 
 **Attribution**: NASA DONKI · NOAA SWPC · Kyoto WDC · Tone.js
 
@@ -135,25 +196,32 @@ npm run dev  # http://localhost:3000
 
 ## 🏗️ Architecture
 
-```mermaid
-flowchart TB
-    Page[page.tsx] --> API & Dash & Side & Cosmic & AVis & FVis & AEng
-    Dash --> AEng
-    API --> Types[types/index.ts]
-    Side --> Hist[data/*.json]
+```
+ app/page.tsx ──▶ nasa-api.ts ──▶ src/types/index.ts   (contract: SpaceWeatherEvent)
+     │                │
+     │                └──▶ 20-min localStorage cache + offline fallbacks
+     │
+     ├──▶ components/dashboard/Dashboard.tsx   (HUD: details, impacts, alerts)
+     ├──▶ components/ui/EventSidebar.tsx       (live feed + historical library)
+     ├──▶ components/visual/CosmicAnimation.tsx (canvas: solar system / Earth)
+     ├──▶ components/visual/{Audio,Frequency}Visualizer.tsx
+     ├──▶ components/audio/AudioEngine.tsx     (5 layers + 5 alerts, Tone.js)
+     ├──▶ components/ui/EducationalPanel.tsx   (quick-reference modal)
+     └──▶ app/sonification/                    (screen-reader guide, 3 tabs)
 ```
 
-**Contract-first**: `SpaceWeatherEvent` — single interface for all components.
+**Contract-first**: every component consumes the single `SpaceWeatherEvent` interface —
+live data, mock data, and historical JSON all speak the same shape.
 
 ---
 
 ## ♿ Accessibility
 
-- **ARIA live regions** for real-time updates
-- **Keyboard nav**: `Tab` controls, `Space` play/mute
-- **Reduced motion**: `prefers-reduced-motion` pauses animation
-- **Color-blind safe**: No red/green sole encoding (tested protanopia/deuteranopia)
-- **Screen readers**: All controls labeled
+- **ARIA live regions** for real-time alerts
+- **Keyboard nav** throughout; skip-to-content link as first focusable element
+- **Reduced motion**: `prefers-reduced-motion` pauses canvases, audio continues
+- **Colour-blind safe**: no red/green sole encoding
+- **Screen readers**: all controls labelled; sonification guide is fully navigable
 - **WCAG AA** contrast ratios
 
 ---
@@ -161,25 +229,15 @@ flowchart TB
 ## 🎯 Submission Checklist
 
 - [x] Live app (Vercel)
-- [x] README with NASA/NOAA attribution + Quebec 1989 story
+- [x] README with NASA/NOAA/Kyoto attribution
 - [x] 5-event historical library (offline demo)
-- [x] Live visualizer + physics-based CME ETA
+- [x] Live visualizer + physics-based CME ETA + realistic Earth close-up
 - [x] 5-layer sonification + 5 threshold alerts
-- [x] Accessibility audit
+- [x] Accessibility audit (skip link, contrast, ARIA, reduced motion)
+- [x] `/sonification` screen-reader guide
 - [ ] 60s demo video
 - [ ] 7-slide pitch deck
 - [ ] NASA portal submission
-
----
-
-## 🛠️ Team Handoff
-
-| Role | Focus |
-|------|-------|
-| **Researcher** | Verify Carrington/Halloween data; deepen events |
-| **UI/Accessibility** | Contrast, ARIA, screen-reader, reduced-motion QA |
-| **Storyteller** | Portal entry, pitch deck, "Why sonification?" |
-| **Demo Producer** | 60s video, final package |
 
 ---
 
@@ -189,4 +247,5 @@ MIT — free for any use. Attribution appreciated.
 
 ---
 
-*Independent project developed by TEAM NRZB for NASA Space Apps Challenge 2026.*
+*Built for NASA Space Apps Challenge 2026 by Team NRZB —
+[code](https://github.com/CTRLD3FEAT/Heliophon).*

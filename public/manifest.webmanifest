@@ -1,6 +1,6 @@
 {
-  "name": "Solar Jukebox",
-  "short_name": "Solar Jukebox",
+  "name": "Heliophon",
+  "short_name": "Heliophon",
   "description": "Accessible space weather sonification — hear the state of the grid from NASA and NOAA data.",
   "start_url": ".",
   "display": "standalone",

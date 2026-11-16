@@ -94,7 +94,23 @@ But today's warnings live in **NOAA dashboards, JSON feeds, and specialist chart
 
 ---
 
+## Data Sources (attribution)
+
+| Source | What it gives | Endpoint / docs |
+|--------|--------------|-----------------|
+| **NASA DONKI** | CME speed, half-angle, direction | https://api.nasa.gov/DONKI/CME · https://kauai.ccmc.gsfc.nasa.gov/DONKI/ |
+| **NOAA GOES X-ray flux** | Flare class A–X | https://services.swpc.noaa.gov/json/goes/primary/xrays-6-hour.json · https://www.swpc.noaa.gov/products/goes-x-ray-flux |
+| **NOAA Planetary Kp** | Kp 0–9 (observed + 3-day forecast) | https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json · https://services.swpc.noaa.gov/products/noaa-planetary-k-index-forecast.json |
+| **Kyoto WDC Dst (NOAA mirror)** | Ring-current index (nT) | https://services.swpc.noaa.gov/products/kyoto-dst.json · http://wdc.kugi.kyoto-u.ac.jp/dst_realtime/presentmonth/index.html |
+| **NOAA Solar–Geophysical Event** | Flare/probability forecast | https://services.swpc.noaa.gov/products/solar-geophysical-event.json |
+
+Historical events in `src/data/*.json` are documented reconstructions with explicit
+confidence labels (`direct` / `partial` / `historical`).
+
+---
+
 **Name**: Heliophon  
 **Team**: NRZB  
 **Challenge**: NASA Space Apps 2026  
-**Live**: `https://heliophon.vercel.app` (or your deploy URL)
+**Code**: `https://github.com/CTRLD3FEAT/Heliophon`  
+**Live**: `https://heliophon.vercel.app` (update with final deploy URL)
