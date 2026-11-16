@@ -20,6 +20,12 @@ interface Particle {
 let solarWindParticles: Particle[] = [];
 let cmeParticles: Particle[] = [];
 let lastCmeSpawn = 0;
+
+// Deterministic pseudo-random (stable across frames — no flicker)
+const prand = (seed: number) => {
+  const s = Math.sin(seed) * 43758.5453;
+  return s - Math.floor(s);
+};
 let magnetosphereHit = false;
 
 interface CosmicAnimationProps {
@@ -219,9 +225,25 @@ export function CosmicAnimation({
       const h = canvas.height / (window.devicePixelRatio || 1);
       ctx.clearRect(0, 0, w, h);
 
-      // Background
-      ctx.fillStyle = '#E9E9E5';
-      ctx.fillRect(0, 0, w, h);
+      // Background — light in solar-system view, deep space with stars in close-up
+      if (viewMode === 'earth-closeup') {
+        ctx.fillStyle = '#02040a';
+        ctx.fillRect(0, 0, w, h);
+        // Deterministic starfield
+        for (let i = 0; i < 140; i++) {
+          const sx = prand(i * 12.9898) * w;
+          const sy = prand(i * 78.233) * h;
+          const sSize = prand(i * 43.123) * 1.4 + 0.3;
+          const tw = 0.5 + Math.sin(timestamp * 0.001 + i * 2.3) * 0.3;
+          ctx.beginPath();
+          ctx.arc(sx, sy, sSize, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(230, 240, 255, ${0.25 + tw * 0.55})`;
+          ctx.fill();
+        }
+      } else {
+        ctx.fillStyle = '#E9E9E5';
+        ctx.fillRect(0, 0, w, h);
+      }
 
       const cx = sun.x;
       const cy = sun.y;
@@ -331,7 +353,7 @@ export function CosmicAnimation({
 
         if (showLabels) {
           ctx.font = 'bold 14px "Inter", sans-serif';
-          ctx.fillStyle = '#1D4ED8';
+          ctx.fillStyle = '#9cc0ff';
           ctx.textAlign = 'center';
           ctx.fillText('EARTH CLOSE-UP', cx, 30);
         }
@@ -689,15 +711,16 @@ function drawEarthMagnetosphere(
   const { x, y, radius } = earth;
   const magRadius = radius * magnetosphereCompression;
 
-  // Magnetosphere glow
-  const magGradient = ctx.createRadialGradient(x, y, radius * 1.2, x, y, magRadius * 1.3);
+  // Magnetosphere glow (subtle in the photoreal close-up — keep space black)
+  const glowK = realisticEarth ? 0.35 : 1;
+  const magGradient = ctx.createRadialGradient(x, y, radius * 1.2, x, y, magRadius * (realisticEarth ? 1.15 : 1.3));
   magGradient.addColorStop(0, 'rgba(34, 211, 232, 0)');
-  magGradient.addColorStop(0.5, `rgba(34, 211, 232, ${0.08 + auroraIntensity * 0.1})`);
-  magGradient.addColorStop(0.8, `rgba(34, 211, 232, ${0.15 + auroraIntensity * 0.15})`);
+  magGradient.addColorStop(0.5, `rgba(34, 211, 232, ${(0.08 + auroraIntensity * 0.1) * glowK})`);
+  magGradient.addColorStop(0.8, `rgba(34, 211, 232, ${(0.15 + auroraIntensity * 0.15) * glowK})`);
   magGradient.addColorStop(1, 'rgba(34, 211, 232, 0)');
 
   ctx.beginPath();
-  ctx.arc(x, y, magRadius * 1.3, 0, Math.PI * 2);
+  ctx.arc(x, y, magRadius * (realisticEarth ? 1.15 : 1.3), 0, Math.PI * 2);
   ctx.fillStyle = magGradient;
   ctx.fill();
 
@@ -882,12 +905,6 @@ function drawRealisticEarth(
 ) {
   const R = radius;
 
-  // Deterministic pseudo-random (stable across frames — no flicker)
-  const prand = (seed: number) => {
-    const s = Math.sin(seed) * 43758.5453;
-    return s - Math.floor(s);
-  };
-
   // Smooth closed path through points (quadratic midpoints — organic coastlines)
   const smoothPath = (pts: Array<{ px: number; py: number }>) => {
     const n = pts.length;
@@ -935,17 +952,20 @@ function drawRealisticEarth(
   ctx.fillStyle = fwdScatter;
   ctx.fill();
 
-  // Bright Rayleigh rim arc on the sunlit side (soft, then crisp)
+  // Bright blue atmosphere ring hugging the whole limb (photo-real look)
   ctx.lineCap = 'round';
+  const ringGlow = ctx.createRadialGradient(x, y, R * 0.99, x, y, R * 1.12);
+  ringGlow.addColorStop(0, 'rgba(90, 170, 255, 0.55)');
+  ringGlow.addColorStop(0.35, 'rgba(80, 150, 255, 0.32)');
+  ringGlow.addColorStop(1, 'rgba(80, 150, 255, 0)');
   ctx.beginPath();
-  ctx.arc(x, y, R * 1.01, Math.PI * 0.62, Math.PI * 1.38);
-  ctx.strokeStyle = 'rgba(180, 215, 255, 0.35)';
-  ctx.lineWidth = R * 0.09;
-  ctx.stroke();
+  ctx.arc(x, y, R * 1.12, 0, Math.PI * 2);
+  ctx.fillStyle = ringGlow;
+  ctx.fill();
   ctx.beginPath();
-  ctx.arc(x, y, R * 1.0, Math.PI * 0.68, Math.PI * 1.32);
-  ctx.strokeStyle = 'rgba(220, 240, 255, 0.85)';
-  ctx.lineWidth = R * 0.022;
+  ctx.arc(x, y, R * 1.005, 0, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(150, 210, 255, 0.9)';
+  ctx.lineWidth = R * 0.018;
   ctx.stroke();
 
   // ---------- 2. OCEAN ----------
@@ -953,11 +973,11 @@ function drawRealisticEarth(
     x - R * 0.35, y - R * 0.35, R * 0.1,
     x, y, R
   );
-  ocean.addColorStop(0, '#8ed4fa');
-  ocean.addColorStop(0.35, '#3a8ede');
-  ocean.addColorStop(0.65, '#2067bb');
-  ocean.addColorStop(0.88, '#133f86');
-  ocean.addColorStop(1, '#0a2a5e');
+  ocean.addColorStop(0, '#4a92d8');
+  ocean.addColorStop(0.35, '#2a6cc0');
+  ocean.addColorStop(0.65, '#174d9e');
+  ocean.addColorStop(0.88, '#0f3878');
+  ocean.addColorStop(1, '#09285c');
   ctx.beginPath();
   ctx.arc(x, y, R, 0, Math.PI * 2);
   ctx.fillStyle = ocean;
@@ -1052,10 +1072,10 @@ function drawRealisticEarth(
     smoothPath(pts);
     // Two-tone land: warm green sunlit face -> deep olive night face
     const land = ctx.createLinearGradient(x - R, y, x + R, y);
-    land.addColorStop(0, '#4d9448');
-    land.addColorStop(0.45, '#357c35');
-    land.addColorStop(0.75, '#27592a');
-    land.addColorStop(1, '#183519');
+    land.addColorStop(0, '#93a565');
+    land.addColorStop(0.4, '#7f9355');
+    land.addColorStop(0.7, '#5e7a42');
+    land.addColorStop(1, '#3f5230');
     ctx.fillStyle = land;
     ctx.fill();
     ctx.strokeStyle = 'rgba(16, 50, 24, 0.5)';
@@ -1074,8 +1094,8 @@ function drawRealisticEarth(
       ctx.beginPath();
       ctx.ellipse(sx, sy, sr * 1.6, sr, prand(ci + i) * 3, 0, Math.PI * 2);
       ctx.fillStyle = light
-        ? 'rgba(150, 205, 120, 0.22)'
-        : 'rgba(22, 62, 30, 0.28)';
+        ? 'rgba(214, 190, 130, 0.28)'
+        : 'rgba(60, 82, 44, 0.32)';
       ctx.fill();
     }
     // Mountain ridge strokes on the big continents
@@ -1095,7 +1115,7 @@ function drawRealisticEarth(
 
   // Desert belt highlights on sunlit land (Sahara / Australia tone)
   ctx.globalAlpha = 0.5;
-  [{ ax: 0.46, ay: -0.08, r: 0.13 }, { ax: 0.68, ay: 0.52, r: 0.09 }].forEach(d => {
+  [{ ax: 0.46, ay: -0.08, r: 0.18 }, { ax: 0.68, ay: 0.52, r: 0.13 }, { ax: -0.5, ay: -0.3, r: 0.1 }].forEach(d => {
     const p = project(d.ax, d.ay, angle);
     const g = ctx.createRadialGradient(p.px, p.py, 0, p.px, p.py, d.r * R);
     g.addColorStop(0, 'rgba(212, 178, 106, 0.75)');
@@ -1108,13 +1128,13 @@ function drawRealisticEarth(
   ctx.globalAlpha = 1;
 
   // Polar ice caps — soft white hugging the poles
-  ctx.globalAlpha = 0.3;
-  ctx.fillStyle = '#f4f9ff';
+  ctx.globalAlpha = 0.6;
+  ctx.fillStyle = '#fbfdff';
   ctx.beginPath();
-  ctx.ellipse(x, y - R * 0.9, R * 0.18, R * 0.05, 0, 0, Math.PI * 2);
+  ctx.ellipse(x, y - R * 0.965, R * 0.3, R * 0.05, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.beginPath();
-  ctx.ellipse(x, y + R * 0.92, R * 0.2, R * 0.05, 0, 0, Math.PI * 2);
+  ctx.ellipse(x, y + R * 0.975, R * 0.34, R * 0.055, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.globalAlpha = 1;
 
@@ -1135,11 +1155,13 @@ function drawRealisticEarth(
   // Clouds — shadowed, elongated swirls drifting faster than the surface
   const cloudDrift = angle * 1.35 + timestamp * 0.00012;
   const clouds = [
-    { ax: -0.5, ay: -0.25, r: 0.13 }, { ax: 0.0, ay: -0.45, r: 0.16 },
-    { ax: 0.3, ay: -0.1, r: 0.12 }, { ax: 0.05, ay: 0.2, r: 0.17 },
-    { ax: -0.35, ay: 0.35, r: 0.14 }, { ax: 0.55, ay: 0.35, r: 0.12 },
-    { ax: 0.7, ay: -0.45, r: 0.1 }, { ax: -0.62, ay: -0.6, r: 0.11 },
-    { ax: 0.15, ay: -0.65, r: 0.09 },
+    { ax: -0.5, ay: -0.25, r: 0.17 }, { ax: 0.0, ay: -0.45, r: 0.2 },
+    { ax: 0.3, ay: -0.1, r: 0.15 }, { ax: 0.05, ay: 0.2, r: 0.22 },
+    { ax: -0.35, ay: 0.35, r: 0.18 }, { ax: 0.55, ay: 0.35, r: 0.16 },
+    { ax: 0.7, ay: -0.45, r: 0.13 }, { ax: -0.62, ay: -0.6, r: 0.15 },
+    { ax: 0.15, ay: -0.65, r: 0.12 }, { ax: -0.1, ay: -0.05, r: 0.16 },
+    { ax: 0.45, ay: 0.02, r: 0.13 }, { ax: -0.55, ay: 0.1, r: 0.12 },
+    { ax: 0.2, ay: 0.55, r: 0.12 }, { ax: 0.62, ay: -0.2, r: 0.11 },
   ];
   clouds.forEach((cloud, i) => {
     const cAngle = Math.atan2(cloud.ay, cloud.ax) + cloudDrift;
@@ -1147,19 +1169,20 @@ function drawRealisticEarth(
     const px = x + Math.cos(cAngle) * dist;
     const py = y + Math.sin(cAngle) * dist;
     const rot = prand(i * 21.3) * Math.PI;
-    const rx = cloud.r * R * 0.75;
-    const ry = cloud.r * R * 0.26;
+    const rx = cloud.r * R * 0.95;
+    const ry = cloud.r * R * 0.4;
 
     // Cloud shadow (offset toward lower-right)
     ctx.beginPath();
     ctx.ellipse(px + R * 0.02, py + R * 0.015, rx, ry, rot, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(5, 18, 38, 0.08)';
+    ctx.fillStyle = 'rgba(5, 18, 38, 0.14)';
     ctx.fill();
 
     // Cloud body
     const cloudGrad = ctx.createRadialGradient(px, py, 0, px, py, Math.max(rx, ry));
-    cloudGrad.addColorStop(0, 'rgba(255, 255, 255, 0.32)');
-    cloudGrad.addColorStop(0.6, 'rgba(255, 255, 255, 0.13)');
+    cloudGrad.addColorStop(0, 'rgba(255, 255, 255, 0.78)');
+    cloudGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.45)');
+    cloudGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
     cloudGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
     ctx.beginPath();
     ctx.ellipse(px, py, rx, ry, rot, 0, Math.PI * 2);
@@ -1184,9 +1207,9 @@ function drawRealisticEarth(
   // Terminator — smooth linear falloff into night (away from the Sun, right)
   const term = ctx.createLinearGradient(x - R * 0.1, 0, x + R, 0);
   term.addColorStop(0, 'rgba(2, 4, 16, 0)');
-  term.addColorStop(0.42, 'rgba(2, 4, 16, 0.16)');
-  term.addColorStop(0.68, 'rgba(2, 4, 16, 0.52)');
-  term.addColorStop(1, 'rgba(2, 4, 16, 0.8)');
+  term.addColorStop(0.55, 'rgba(2, 4, 16, 0.05)');
+  term.addColorStop(0.8, 'rgba(2, 4, 16, 0.22)');
+  term.addColorStop(1, 'rgba(2, 4, 16, 0.42)');
   ctx.beginPath();
   ctx.arc(x, y, R, 0, Math.PI * 2);
   ctx.fillStyle = term;
@@ -1245,8 +1268,8 @@ function drawRealisticEarth(
   const twilight = ctx.createLinearGradient(x - R, 0, x + R, 0);
   twilight.addColorStop(0, 'rgba(255, 150, 60, 0)');
   twilight.addColorStop(0.28, 'rgba(255, 165, 70, 0.10)');
-  twilight.addColorStop(0.44, 'rgba(255, 140, 50, 0.28)');
-  twilight.addColorStop(0.58, 'rgba(255, 110, 40, 0.16)');
+  twilight.addColorStop(0.44, 'rgba(255, 140, 50, 0.14)');
+  twilight.addColorStop(0.58, 'rgba(255, 110, 40, 0.08)');
   twilight.addColorStop(0.78, 'rgba(255, 110, 40, 0)');
   ctx.beginPath();
   ctx.arc(x, y, R, 0, Math.PI * 2);
